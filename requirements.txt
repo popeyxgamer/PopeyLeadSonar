@@ -1,0 +1,21 @@
+PySide6>=6.6
+requests>=2.31
+beautifulsoup4>=4.12
+fake-useragent>=1.5
+httpx>=0.27
+ddgs>=6.0
+cryptography>=42.0
+openpyxl>=3.1
+dnspython>=2.6
+matplotlib>=3.8
+numpy<2.0
+email-validator>=2.1
+
+# Opcjonalnie, TYLKO jeśli używasz proxy typu socks5:// w Ustawieniach (proxy
+# działa też bez tego dla proxy typu http://) - odkomentuj i doinstaluj:
+# requests[socks]>=2.31
+# httpx[socks]>=0.27
+
+# Opcjonalnie, TYLKO do budowania samodzielnego pliku .exe/binarki (patrz
+# INSTRUKCJA.md, sekcja "Kompilacja do pliku wykonywalnego"):
+# pyinstaller>=6.0
