@@ -334,8 +334,8 @@ class SendingView(BaseView):
         """Otwiera kreator szablonu AI."""
         from ui.widgets.template_wizard import TemplateWizard
         wiz = TemplateWizard(self)
-        if wiz.exec():
-            result = wiz.field("ai_result")
+        if wiz.exec_():
+            result = wiz.property("final_ai_result")
             if result:
                 self.szablon_edit.setPlainText(result)
                 bus.show_message.emit("AI", tr("Szablon wklejony do zakładki Wysyłka!"))

@@ -22,9 +22,18 @@ class IntroPage(QWizardPage):
 
         self.user_msg_edit = QTextEdit()
         self.user_msg_edit.setPlaceholderText("np. Dzień dobry, chcialbym zaprosić Państwa do współpracy...")
+        # Ważne: QTextEdit nie odświeża automatycznie stanu przycisku "Dalej"
+        self.user_msg_edit.textChanged.connect(self.completeChanged)
         layout.addWidget(self.user_msg_edit)
 
-        self.registerField("user_msg*", self.user_msg_edit, "plainText")
+    def isComplete(self):
+        # Przycisk "Dalej" będzie aktywny tylko gdy wpisano tekst
+        return bool(self.user_msg_edit.toPlainText().strip())
+
+    def validatePage(self):
+        # Zapisujemy ręcznie do pola, żeby było dostępne w PromptPage
+        self.wizard().setProperty("user_msg_content", self.user_msg_edit.toPlainText())
+        return True
 
 class PromptPage(QWizardPage):
     def __init__(self, parent=None):
@@ -50,7 +59,8 @@ class PromptPage(QWizardPage):
         layout.addWidget(info)
 
     def initializePage(self):
-        user_msg = self.field("user_msg")
+        # Pobieramy treść zapisaną w validatePage poprzedniego kroku
+        user_msg = self.wizard().property("user_msg_content") or ""
         company = get_company_info()
 
         # Ostrzeżenie jeśli brakuje kluczowych danych
@@ -81,9 +91,11 @@ class ResultPage(QWizardPage):
         layout = QVBoxLayout(self)
         self.result_edit = QTextEdit()
         self.result_edit.setPlaceholderText(tr("Wklej wynik z AI..."))
+        self.result_edit.textChanged.connect(self.completeChanged)
         layout.addWidget(self.result_edit)
 
-        self.registerField("ai_result*", self.result_edit, "plainText")
+    def isComplete(self):
+        return bool(self.result_edit.toPlainText().strip())
 
     def validatePage(self):
         text = self.result_edit.toPlainText().strip()
@@ -99,6 +111,8 @@ class ResultPage(QWizardPage):
             text = "\n".join(lines).strip()
             self.result_edit.setPlainText(text)
 
+        # Zapisujemy do właściwości wizarda, aby odebrać w SendingView
+        self.wizard().setProperty("final_ai_result", text)
         return True
 
 class TemplateWizard(QWizard):
