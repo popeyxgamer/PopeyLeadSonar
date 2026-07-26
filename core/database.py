@@ -442,6 +442,14 @@ def mark_sent(email: str, profile: Optional[str] = None) -> None:
         )
 
 
+def mark_invalid(email: str, profile: Optional[str] = None) -> None:
+    """Oznacza lead jako błędny, aby nie próbować wysyłki ponownie."""
+    with get_connection_context(profile) as conn:
+        conn.execute(
+            "UPDATE leads SET status='błędny' WHERE email=?", (email.strip().lower(),)
+        )
+
+
 def get_unscored_leads(profile: Optional[str] = None) -> List[Tuple]:
     """Zwraca leady bez scoru (lead_score = -1) do AI oceniania."""
     with get_connection_context(profile) as conn:

@@ -288,6 +288,12 @@ class SendWorker(QThread):
             else:
                 self.errors += 1
                 db.log_wysylka(lead.get('id', 0), email, temat, tresc, 'błąd', msg)
+
+                # Jeśli to twardy błąd (np. MX, zły adres), oznacz lead jako błędny na stałe
+                if any(x in msg.lower() for x in ["mx verification failed", "nieprawidłowy adres", "brak rekordu mx", "does not exist"]):
+                    db.mark_invalid(email)
+                    self.status.emit(tr("🚫 {} oznaczony jako błędny (trwały błąd)").format(email))
+
                 self.lead_done.emit({**lead, 'send_status': 'error', 'send_msg': msg or tr('Błąd wysyłki')})
                 self.progress.emit(i + 1, total)
                 self.counters.emit(i + 1, self.sent, self.skipped, self.errors)
@@ -384,9 +390,13 @@ class AIAutoSendWorker(QThread):
                     language=self.email_language, page_text=page_text
                 )
                 if email_data:
-                    ok, _, _ = wyslij_email(email, email_data["subject"], email_data["body"], self.user, self.pwd, self.host, self.port, dry_run=self.dry_run)
-                    if ok: sent += 1; self.wyslane.add(email); db.mark_sent(email)
-                    else: errors += 1
+                    ok, msg, _ = wyslij_email(email, email_data["subject"], email_data["body"], self.user, self.pwd, self.host, self.port, dry_run=self.dry_run)
+                    if ok:
+                        sent += 1; self.wyslane.add(email); db.mark_sent(email)
+                    else:
+                        errors += 1
+                        if any(x in msg.lower() for x in ["mx verification failed", "nieprawidłowy adres", "brak rekordu mx", "does not exist"]):
+                            db.mark_invalid(email)
                 else: errors += 1
             else:
                 skipped += 1
