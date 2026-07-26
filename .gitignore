@@ -28,6 +28,7 @@ wheels/
 *.swo
 
 # Project specific - Privacy & Security
+.artifacts/
 profiles/
 *.log
 *.key
