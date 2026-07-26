@@ -58,7 +58,7 @@ def restart_app() -> None:
     os.execv(python, [python] + sys.argv)
 
 def tr(text: str) -> str:
-    if _current_language == "pl" or not text:
+    if not text:
         return text
     table = TRANSLATIONS.get(_current_language)
     if not table:
@@ -69,6 +69,9 @@ def tr(text: str) -> str:
 # SŁOWNIKI TŁUMACZEŃ
 # ======================================================================
 TRANSLATIONS = {
+ "pl": {
+  "AI_PROMPT_TEMPLATE": "**Rola:** Jesteś ekspertem od copywritingu sprzedażowego i automatyzacji cold mailingu. Twoim zadaniem jest przekształcenie surowej wiadomości w profesjonalny, wielowariantowy szablon w formacie SPINTAX.\n\n**Wiadomość bazowa do przerobienia:**\n\"{user_msg}\"\n\n**Dane mojej firmy (użyj ich w tekście):**\n- Firma: {company_name}\n- Oferta: {company_offer}\n- WWW: {company_website}\n\n**ZASADY TECHNICZNE (KRYTYCZNE):**\n1. Używaj formatu mieszacza treści: {{{{opcja 1|opcja 2|opcja 3}}}}.\n2. Stosuj głębokie zagnieżdżanie, aby każda wiadomość była unikalna, np.: {{{{Cześć|{{{{Dzień dobry|Witaj}}}}}}}}.\n3. Obowiązkowo używaj zmiennych w klamrach: {{firma}} (nazwa odbiorcy), {{kontakt}} (imię osoby), {{company_name}} (moja firma).\n4. Zachowaj profesjonalny, biznesowy ton.\n5. Nie dodawaj stopki na końcu (zostanie dodana automatycznie).\n\n**INSTRUKCJA DLA CIEBIE:**\nZwróć TYLKO czysty tekst szablonu z klamrami spintax. Nie pisz żadnych wstępów ani żadnych komentarzy po tekście."
+ },
  "en": {
   "Pulpit Sterowniczy": "Dashboard",
   "WSZYSTKIE LEADY": "TOTAL LEADS",
