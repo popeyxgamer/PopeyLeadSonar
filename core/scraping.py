@@ -47,6 +47,40 @@ except Exception as e:  # fake_useragent może nie mieć dostępu do sieci/danyc
 EMAIL_RE = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
 EMAIL_RE_STRICT = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
 
+# Rozszerzona lista blokowanych rozszerzeń plikow - scraper czasem blednie
+# wyciaga z atrybutow src/href obrazki, czcionki, dokumenty itp. jako
+# rzekomy adres e-mail (np. "cos@2x.webp" z retina-obrazka).
+_BLOCKED_EXTENSIONS = (
+    '.png', '.jpg', '.jpeg', '.gif', '.svg', '.css', '.js', '.ico', '.pdf',
+    '.webp', '.avif', '.bmp', '.tiff', '.tif', '.woff', '.woff2', '.ttf',
+    '.eot', '.otf', '.mp4', '.mp3', '.webm', '.mov', '.zip', '.rar',
+    '.doc', '.docx', '.xls', '.xlsx', '.json', '.xml', '.map',
+)
+
+# Pozostalosci niedokodowanych sekwencji unicode/URL (np. "\u002f" = "/",
+# "\u003c" = "<"), ktore czasem zostaja w tekscie strony po niepelnym
+# dekodowaniu JS/HTML i wpadaja w regex adresu e-mail jako czesc lokalna.
+_ESCAPED_UNICODE_RE = re.compile(r'u0[0-9a-f]{2}[a-z]', re.IGNORECASE)
+
+# Popularne, realnie istniejace koncowki domen (gTLD + czeste TLD-y z
+# kontekstu B2B DACH/EU). Uzywane tylko jako dodatkowy sygnal dla krotkich/
+# srednich koncowek (3-10 znakow) - eliminuje sklejone "smieciowe"
+# koncowki typu ".atremax" czy ".atuid", powstale gdy scraper skleja dwie
+# frazy/domeny bez separatora. Krotsze (2-znakowe, np. ccTLD ".de"/".pl") i
+# dluzsze (11+ znakow, rzadkie nowe gTLD-y) koncowki nie sa tu ograniczane,
+# zeby nie odrzucac prawdziwych, rzadszych domen.
+_KNOWN_TLDS = {
+    "com", "net", "org", "info", "biz", "eu", "int", "name", "pro",
+    "mobi", "asia", "jobs", "travel", "xyz", "online", "shop", "store",
+    "tech", "agency", "solutions", "consulting", "gmbh", "cloud", "app",
+    "io", "co", "me", "tv", "dev", "site", "email", "company",
+    "edu", "gov", "mil", "museum", "immo", "immobilien", "haus", "bau",
+    "handwerk", "restaurant", "hotel", "versicherung", "reisen",
+    "construction", "estate", "properties", "management", "services",
+    "clinic", "dental", "legal", "law", "finance", "financial",
+    "insurance", "realestate",
+}
+
 try:
     from ddgs import DDGS
     DDGS_AVAILABLE = True
@@ -126,10 +160,76 @@ def is_valid_email(email: str) -> bool:
     if not email:
         return False
     email = email.lower().strip()
-    blocked_ext = ('.png', '.jpg', '.jpeg', '.gif', '.svg', '.css', '.js', '.ico', '.pdf')
-    if email.endswith(blocked_ext):
+
+    if email.endswith(_BLOCKED_EXTENSIONS):
         return False
-    return bool(EMAIL_RE_STRICT.match(email))
+
+    if not EMAIL_RE_STRICT.match(email):
+        return False
+
+    local_part, _, domain = email.partition('@')
+
+    # Pozostalosci niedokodowanych sekwencji (np. "u002f", "u003c") w
+    # czesci lokalnej to prawie zawsze smieci wyciagniete z kodu strony,
+    # a nie prawdziwy adres.
+    if _ESCAPED_UNICODE_RE.search(local_part):
+        return False
+
+    labels = domain.split('.')
+    if len(labels) < 2:
+        return False
+
+    # "www" sklejone w srodku etykiety domeny (np. "dewww") zdradza dwie
+    # posklejane domeny/frazy bez separatora - typowy blad scrapera. Samo
+    # "www" jako oddzielna etykieta (np. "www.firma.de") jest OK.
+    for label in labels:
+        if 'www' in label and label != 'www':
+            return False
+
+    # Podejrzana/sklejona koncowka domeny (np. ".atremax", ".atuid") -
+    # patrz komentarz przy _KNOWN_TLDS.
+    tld = labels[-1]
+    if 3 <= len(tld) <= 10 and tld not in _KNOWN_TLDS:
+        return False
+
+    # Zabezpieczenie przed absurdalnie dlugimi "adresami" (posklejane
+    # frazy/URL-e ze strony) - realne adresy e-mail sa znacznie krotsze.
+    if len(local_part) > 64 or len(domain) > 100:
+        return False
+
+    return True
+
+
+def decode_rot13(text: str) -> str:
+    """Dekoduje tekst zakodowany prostym szyfrem ROT13."""
+    import codecs
+    return codecs.decode(text, 'rot_13')
+
+
+def detect_and_decode_rot13_email(candidate: str) -> Optional[str]:
+    """
+    Inteligentnie rozpoznaje czy kandydat jest prawdziwym mailem czy ROT13.
+    Wykorzystuje weryfikacje MX jako ostateczny dowod poprawnosci.
+    """
+    from .mx_verify import has_mx_record
+
+    candidate = candidate.lower().strip()
+
+    # 1. Sprawdzamy czy "jak jest" ma sens
+    if is_valid_email(candidate):
+        domain = candidate.split('@')[-1]
+        if has_mx_record(domain):
+            return candidate
+
+    # 2. Jesli nie, to moze to ROT13?
+    decoded = decode_rot13(candidate)
+    if is_valid_email(decoded):
+        domain_decoded = decoded.split('@')[-1]
+        if has_mx_record(domain_decoded):
+            logger.info("Odzyskano e-mail ROT13: %s -> %s", candidate, decoded)
+            return decoded
+
+    return None
 
 
 def extract_email_from_html(html: Optional[str]) -> Optional[str]:
@@ -138,20 +238,22 @@ def extract_email_from_html(html: Optional[str]) -> Optional[str]:
         return None
 
     def _is_acceptable(addr: str) -> bool:
-        return not any(x in addr for x in EMAIL_BLACKLIST) and is_valid_email(addr)
+        return not any(x in addr for x in EMAIL_BLACKLIST)
 
     mailto = re.findall(r'mailto:(' + EMAIL_RE + ')', html, re.IGNORECASE)
     for candidate in mailto:
-        candidate = candidate.lower()
-        if _is_acceptable(candidate):
-            return candidate
+        email = detect_and_decode_rot13_email(candidate)
+        if email and _is_acceptable(email):
+            return email
 
     html_clean = re.sub(r'<script.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
     html_clean = re.sub(r'<style.*?</style>', '', html_clean, flags=re.DOTALL | re.IGNORECASE)
+
     for candidate in re.findall(EMAIL_RE, html_clean, re.IGNORECASE):
-        candidate = candidate.lower()
-        if _is_acceptable(candidate):
-            return candidate
+        email = detect_and_decode_rot13_email(candidate)
+        if email and _is_acceptable(email):
+            return email
+
     return None
 
 

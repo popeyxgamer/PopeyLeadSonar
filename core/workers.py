@@ -148,6 +148,7 @@ class SendWorker(QThread):
     progress = Signal(int, int)
     status = Signal(str)
     lead_done = Signal(dict)
+    counters = Signal(int, int, int, int)  # processed, sent, skipped, errors
     finished = Signal()
     error = Signal(str)
 
@@ -257,12 +258,17 @@ class SendWorker(QThread):
             lead = self.leads[i]
             email = (lead.get('email') or '').strip()
             if not email or email in self.wyslane:
-                self.skipped += 1; self.lead_done.emit(lead); self.progress.emit(i+1, total); i += 1; continue
+                self.skipped += 1
+                self.lead_done.emit({**lead, 'send_status': 'skipped', 'send_msg': tr('Brak adresu e-mail lub już wysłano')})
+                self.progress.emit(i+1, total)
+                self.counters.emit(i + 1, self.sent, self.skipped, self.errors)
+                i += 1; continue
 
             dane = {'firma': lead.get('firma', ''), 'email': email, 'id': lead.get('id', ''), **self.company_info}
             tresc = self.resolve_spintax(self.parse_zmienne(self.szablon, dane))
             temat = self.resolve_spintax(self.parse_zmienne(self.temat, dane))
 
+            self.status.emit(tr("📤 Wysyłam do {}...").format(email))
             ok, msg, is_temp = self._send_one(lead, temat, tresc)
 
             if ok:
@@ -270,21 +276,25 @@ class SendWorker(QThread):
                 self.sent += 1
                 db.log_wysylka(lead.get('id', 0), email, temat, tresc, 'wysłano')
                 bus.email_sent.emit({'email': email, 'id': lead.get('id')})
-                self.lead_done.emit(lead)
+                self.lead_done.emit({**lead, 'send_status': 'sent', 'send_msg': tr('Wysłano')})
                 self.progress.emit(i + 1, total)
+                self.counters.emit(i + 1, self.sent, self.skipped, self.errors)
                 i += 1
                 time.sleep(self.send_delay)
             elif is_temp:
+                self.status.emit(tr("⏳ Chwilowy błąd SMTP dla {}, ponawiam...").format(email))
                 time.sleep(SMTP_TEMP_FAIL_PAUSE)
                 continue
             else:
                 self.errors += 1
                 db.log_wysylka(lead.get('id', 0), email, temat, tresc, 'błąd', msg)
-                self.lead_done.emit(lead)
+                self.lead_done.emit({**lead, 'send_status': 'error', 'send_msg': msg or tr('Błąd wysyłki')})
                 self.progress.emit(i + 1, total)
+                self.counters.emit(i + 1, self.sent, self.skipped, self.errors)
                 i += 1
                 time.sleep(self.send_delay)
 
+        self.status.emit(tr("✅ Zakończono: wysłano {} | pominięto {} | błędy {}").format(self.sent, self.skipped, self.errors))
         self.finished.emit()
 
 

@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from ui.views.base_view import BaseView
 from ui.i18n import tr
-from ui.styles import COLOR_SENT_LIST, DEFAULT_TEMPLATE, DEFAULT_SUBJECT
+from ui.styles import COLOR_SENT_LIST, COLOR_SENT_OK, COLOR_SENT_ERROR, DEFAULT_TEMPLATE, DEFAULT_SUBJECT
 from core import database as db
 from core.workers import SendWorker, AIAutoSendWorker
 from core.profile_manager import get_current_profile_settings, get_company_info
@@ -194,6 +194,7 @@ class SendingView(BaseView):
 
     def refresh_send_list(self):
         self.send_list.clear()
+        self._items_by_lead_id = {}
         leads = db.get_leads()
         wyslane = db.get_wyslano_emails()
         for l in leads:
@@ -204,6 +205,7 @@ class SendingView(BaseView):
             item.setData(Qt.UserRole, {"id": l[0], "email": l[3]})
             if already: item.setBackground(QColor(*COLOR_SENT_LIST))
             self.send_list.addItem(item)
+            self._items_by_lead_id[l[0]] = {"item": item, "base_text": f"{l[1]} | {l[3]}"}
 
     def select_new_only(self):
         self.send_list.clearSelection()
@@ -246,6 +248,9 @@ class SendingView(BaseView):
         if not leads: return
 
         self.btn_send_qty.setEnabled(False); self.btn_send_all.setEnabled(False); self.btn_stop.setEnabled(True)
+        self.progress_bar.setMaximum(len(leads)); self.progress_bar.setValue(0)
+        self.status_label.setText(tr("Wysłano: 0 | Pominięto: 0 | Błędy: 0"))
+
         self.worker = SendWorker(
             leads, self.szablon_edit.toPlainText(), self.temat_edit.text(),
             user, pwd, settings.get("smtp_host", SMTP_RELAY_HOST), 587,
@@ -254,10 +259,45 @@ class SendingView(BaseView):
             smime_sign=self.smime_check.isChecked(),
             dry_run=self.dry_run.isChecked()
         )
-        self.worker.progress.connect(self.progress_bar.setValue)
+        self.worker.progress.connect(lambda current, total: self.progress_bar.setValue(current))
         self.worker.status.connect(self.status_label.setText)
+        self.worker.lead_done.connect(self._on_lead_done)
+        self.worker.counters.connect(self._on_counters)
+        self.worker.error.connect(self._on_worker_error)
         self.worker.finished.connect(self.on_finished)
         self.worker.start()
+
+    def _on_lead_done(self, lead):
+        """Aktualizuje na bieżąco status pojedynczego leada na liście (wysłano / błąd / pominięto)."""
+        entry = self._items_by_lead_id.get(lead.get('id'))
+        if not entry:
+            return
+        item = entry["item"]
+        status = lead.get('send_status')
+        msg = lead.get('send_msg', '')
+
+        if status == 'sent':
+            item.setText(f"{entry['base_text']} ✅")
+            item.setBackground(QColor(*COLOR_SENT_OK))
+            item.setToolTip(tr("Wysłano"))
+        elif status == 'error':
+            item.setText(f"{entry['base_text']} ❌ {msg}")
+            item.setBackground(QColor(*COLOR_SENT_ERROR))
+            item.setToolTip(msg)
+        elif status == 'skipped':
+            item.setText(f"{entry['base_text']} ⏭️")
+            item.setToolTip(msg or tr("Pominięto"))
+
+    def _on_counters(self, processed, sent, skipped, errors):
+        self.status_label.setText(
+            tr("Postęp: {}/{} | Wysłano: {} | Pominięto: {} | Błędy: {}").format(
+                processed, self.progress_bar.maximum(), sent, skipped, errors
+            )
+        )
+
+    def _on_worker_error(self, message):
+        self.status_label.setText(f"❌ {message}")
+        bus.show_message.emit(tr("Błąd wysyłki"), message)
 
     def start_ai_auto_send(self):
         selected = [self.send_list.item(i).data(Qt.UserRole) for i in range(self.send_list.count()) if self.send_list.item(i).isSelected()]
