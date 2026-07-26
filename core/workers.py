@@ -198,17 +198,18 @@ class SendWorker(QThread):
             text = text.replace(f"{{{key}}}", str(value or ""))
         return text
 
-    SPINTAX_RE = re.compile(r'\{\{([^{}]*?)\}\}', re.DOTALL)
+    SPINTAX_RE = re.compile(r'\{\{((?:(?!\{\{).)*?)\}\}', re.DOTALL)
 
     @staticmethod
     def resolve_spintax(text: str) -> str:
-        """Rozwiązuje spintax {{opcja1|opcja2}}, wspiera zagnieżdżanie."""
+        """Rozwiązuje spintax {{opcja1|opcja2}}, wspiera zagnieżdżanie i zmienne {firma}."""
         if not text:
             return ""
 
-        # Iteracyjnie rozwiązujemy najbardziej wewnętrzne bloki spintaxu
+        # Iteracyjnie rozwiązujemy najbardziej wewnętrzne bloki spintaxu.
+        # Nowy regex pozwala na obecność pojedynczych klamer (zmiennych) w środku.
         iterations = 0
-        while "{{" in text and "}}" in text and iterations < 100:
+        while "{{" in text and "}}" in text and iterations < 150:
             new_text = SendWorker.SPINTAX_RE.sub(
                 lambda m: random.choice(m.group(1).split('|')),
                 text

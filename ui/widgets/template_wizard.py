@@ -103,14 +103,32 @@ class ResultPage(QWizardPage):
             QMessageBox.warning(self, tr("Błąd"), tr("Wynik z AI nie może być pusty."))
             return False
 
-        # Proste czyszczenie markdowna
-        if text.startswith("```"):
-            lines = text.splitlines()
-            if lines[0].startswith("```"): lines = lines[1:]
-            if lines and lines[-1].startswith("```"): lines = lines[:-1]
-            text = "\n".join(lines).strip()
-            self.result_edit.setPlainText(text)
+        # --- PANCERNY SANITIZER ---
+        # 1. Usuwamy tagi markdownowe (```) i wyciągamy tylko blok kodu jeśli istnieje
+        if "```" in text:
+            import re
+            code_blocks = re.findall(r'```(?:[a-zA-Z]*)\n?(.*?)\n?```', text, re.DOTALL)
+            if code_blocks:
+                text = "\n\n".join(code_blocks).strip()
+            else:
+                # Fallback: po prostu usuń linie zaczynające się od ```
+                text = "\n".join([line for line in text.splitlines() if not line.strip().startswith("```")]).strip()
 
+        # 2. Naprawiamy nadmiarowe klamerki (częsty błąd darmowego AI)
+        import re
+        # Zastąp 3 lub więcej { na dokładnie 2 (dla spintaxu)
+        text = re.sub(r'\{{3,}', '{{', text)
+        # Zastąp 3 lub więcej } na dokładnie 2
+        text = re.sub(r'\}{3,}', '}}', text)
+
+        # 3. Usuwamy typowe wstępy AI
+        if "Hier jest" in text or "Oto Twój" in text or "Your template" in text:
+            # Jeśli tekst zawiera spintax, spróbujmy wyciąć wszystko przed pierwszym {{
+            first_brace = text.find("{{")
+            if first_brace > 10: # tylko jeśli jest jakiś znaczny wstęp
+                text = text[first_brace:].strip()
+
+        self.result_edit.setPlainText(text)
         # Zapisujemy do właściwości wizarda, aby odebrać w SendingView
         self.wizard().setProperty("final_ai_result", text)
         return True
