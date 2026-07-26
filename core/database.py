@@ -431,6 +431,31 @@ def get_wyslano_emails(profile: Optional[str] = None) -> Set[str]:
     return {r[0] for r in rows}
 
 
+def get_excluded_emails(profile: Optional[str] = None) -> Set[str]:
+    """
+    Zwraca zbiór adresów e-mail, do których NIE należy wysyłać wiadomości:
+    - adresy z tabeli wyslano
+    - leady o statusie 'błędny'
+    - leady o statusie 'responded'
+    - adresy z czarnej listy (blacklist)
+    """
+    excluded = set()
+    with get_connection_context(profile) as conn:
+        # 1. Wyslane
+        rows = conn.execute("SELECT email FROM wyslano").fetchall()
+        excluded.update(r[0] for r in rows)
+
+        # 2. Błędne, Odpowiedzieli, Rezygnacja
+        rows = conn.execute("SELECT email FROM leads WHERE status IN ('błędny', 'responded', 'rezygnacja')").fetchall()
+        excluded.update(r[0] for r in rows)
+
+        # 3. Blacklist
+        rows = conn.execute("SELECT email FROM blacklist").fetchall()
+        excluded.update(r[0] for r in rows)
+
+    return excluded
+
+
 def mark_sent(email: str, profile: Optional[str] = None) -> None:
     now = datetime.now().isoformat()
     with get_connection_context(profile) as conn:

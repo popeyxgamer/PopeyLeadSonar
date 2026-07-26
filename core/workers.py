@@ -175,7 +175,7 @@ class SendWorker(QThread):
         self.limit_dzienny = min(limit_dzienny, get_abs_session_cap(smtp_host, custom_cap))
         self.session_cap = self.limit_dzienny
         self._stop = False
-        self.wyslane = db.get_wyslano_emails()
+        self.excluded = db.get_excluded_emails()
         self.sent = 0
         self.errors = 0
         self.skipped = 0
@@ -257,7 +257,7 @@ class SendWorker(QThread):
 
             lead = self.leads[i]
             email = (lead.get('email') or '').strip()
-            if not email or email in self.wyslane:
+            if not email or email in self.excluded:
                 self.skipped += 1
                 self.lead_done.emit({**lead, 'send_status': 'skipped', 'send_msg': tr('Brak adresu e-mail lub już wysłano')})
                 self.progress.emit(i+1, total)
@@ -274,6 +274,7 @@ class SendWorker(QThread):
             if ok:
                 db.mark_sent(email)
                 self.sent += 1
+                self.excluded.add(email)
                 db.log_wysylka(lead.get('id', 0), email, temat, tresc, 'wysłano')
                 bus.email_sent.emit({'email': email, 'id': lead.get('id')})
                 self.lead_done.emit({**lead, 'send_status': 'sent', 'send_msg': tr('Wysłano')})
@@ -322,7 +323,7 @@ class AutoPilotWorker(QThread):
         self.port = port
         self.session_cap = session_cap
         self._stop = False
-        self.wyslane = db.get_wyslano_emails()
+        self.excluded = db.get_excluded_emails()
         self.found = 0
         self.sent = 0
         self.errors = 0
@@ -365,7 +366,7 @@ class AIAutoSendWorker(QThread):
         self.email_language = kwargs.get("email_language", "auto")
         self.dry_run = kwargs.get("dry_run", False)
         self._stop = False
-        self.wyslane = db.get_wyslano_emails()
+        self.excluded = db.get_excluded_emails()
         self.company_info = get_company_info()
 
     def stop(self): self._stop = True
@@ -375,7 +376,7 @@ class AIAutoSendWorker(QThread):
         for lead in self.leads:
             if self._stop: break
             email = lead.get('email')
-            if not email or email in self.wyslane:
+            if not email or email in self.excluded:
                 skipped += 1; continue
 
             self.status.emit(f"🌐 Analiza: {lead.get('firma')}")
@@ -392,7 +393,7 @@ class AIAutoSendWorker(QThread):
                 if email_data:
                     ok, msg, _ = wyslij_email(email, email_data["subject"], email_data["body"], self.user, self.pwd, self.host, self.port, dry_run=self.dry_run)
                     if ok:
-                        sent += 1; self.wyslane.add(email); db.mark_sent(email)
+                        sent += 1; self.excluded.add(email); db.mark_sent(email)
                     else:
                         errors += 1
                         if any(x in msg.lower() for x in ["mx verification failed", "nieprawidłowy adres", "brak rekordu mx", "does not exist"]):

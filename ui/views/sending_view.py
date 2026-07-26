@@ -196,33 +196,54 @@ class SendingView(BaseView):
         self.send_list.clear()
         self._items_by_lead_id = {}
         leads = db.get_leads()
-        wyslane = db.get_wyslano_emails()
+        excluded = db.get_excluded_emails()
+
+        # Pobierz leady o statusie błędny, aby oznaczyć je inaczej
+        with db.get_connection_context() as conn:
+            invalid_rows = conn.execute("SELECT email FROM leads WHERE status='błędny'").fetchall()
+            invalid_emails = {r[0] for r in invalid_rows}
+
         for l in leads:
-            text = f"{l[1]} | {l[3]}"
-            already = l[8] == 'wysłano' or l[3] in wyslane
-            if already: text += " ✅"
+            email = l[3]
+            text = f"{l[1]} | {email}"
+
+            is_excluded = email in excluded
+            is_invalid = email in invalid_emails
+
+            if is_invalid:
+                text += " 🚫 (" + tr("błędny") + ")"
+            elif is_excluded:
+                text += " ✅"
+
             item = QListWidgetItem(text)
-            item.setData(Qt.UserRole, {"id": l[0], "email": l[3]})
-            if already: item.setBackground(QColor(*COLOR_SENT_LIST))
+            item.setData(Qt.UserRole, {"id": l[0], "email": email, "is_invalid": is_invalid})
+
+            if is_invalid:
+                item.setForeground(QColor("#f38ba8")) # Czerwony dla błędnych
+            elif is_excluded:
+                item.setBackground(QColor(*COLOR_SENT_LIST))
+
             self.send_list.addItem(item)
-            self._items_by_lead_id[l[0]] = {"item": item, "base_text": f"{l[1]} | {l[3]}"}
+            self._items_by_lead_id[l[0]] = {"item": item, "base_text": f"{l[1]} | {email}"}
 
     def select_new_only(self):
         self.send_list.clearSelection()
-        wyslane = db.get_wyslano_emails()
+        excluded = db.get_excluded_emails()
         for i in range(self.send_list.count()):
-            item = self.send_list.item(i); data = item.data(Qt.UserRole)
-            if data and data.get('email') not in wyslane: item.setSelected(True)
+            item = self.send_list.item(i)
+            data = item.data(Qt.UserRole)
+            if data and data.get('email') not in excluded:
+                item.setSelected(True)
 
     def start_manual_send(self, limit=None):
-        # 1. Pobierz wszystkie leady, do których jeszcze nie wysłano wiadomości
-        wyslane = db.get_wyslano_emails()
+        # 1. Pobierz wszystkie leady, które NIE są wykluczone
+        excluded = db.get_excluded_emails()
         leads_to_send_data = []
 
         for i in range(self.send_list.count()):
             item = self.send_list.item(i)
             data = item.data(Qt.UserRole)
-            if data and data.get('email') not in wyslane:
+            if data and data.get('email') not in excluded:
                 leads_to_send_data.append(data)
 
         if not leads_to_send_data:
