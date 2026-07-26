@@ -1,16 +1,20 @@
 # -*- coding: utf-8 -*-
 """SMTP account rotation for load balancing and quota management."""
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Any
 from .config import logger
 
 
 class SMTPAccountRotator:
     """Rotuje między wieloma kontami SMTP."""
 
-    def __init__(self, accounts: List[Dict[str, str]]):
-        self.accounts = accounts
+    def __init__(self, accounts: List[Dict[str, Any]]):
+        # Filtrujemy konta: zostawiamy tylko te włączone i NIE oznaczone jako "tylko do rozgrzewania"
+        self.accounts = [
+            a for a in accounts
+            if a.get("enabled", True) and not a.get("warmup_only", False)
+        ]
         self.current_index = 0
-        self._usage_count: Dict[int, int] = {i: 0 for i in range(len(accounts))}
+        self._usage_count: Dict[int, int] = {i: 0 for i in range(len(self.accounts))}
         self._max_per_account = 1000
 
     def set_max_per_account(self, max_per: int):

@@ -110,8 +110,8 @@ class ProfileWizard(QWizard):
                 'custom_send_delay': data.get('custom_delay', 3.0),
                 'custom_session_cap': data.get('custom_cap', 250),
                 'html_enabled': data.get('html_enabled', False),
-                'mx_verify_enabled': data.get('mx_enabled', False),
-                'smime_enabled': data.get('smime_enabled', False),
+                'mx_verify_enabled': data.get('mx_enabled', True),
+                'smime_enabled': data.get('smime_enabled', True),
                 'attachments': data.get('attachments', ''),
                 'account_rotation_enabled': False,
                 'rotation_max_per_account': 1000,
@@ -367,27 +367,38 @@ Web: {company_website}"""
         # Dla "Własny" – nie zmieniaj
 
     def _preview(self):
-        from PySide6.QtWidgets import QMessageBox
-        from core.workers import SendWorker
-        dane = {
-            'firma': 'Przykładowa Firma Sp. z o.o.',
-            'kontakt': 'Jan Kowalski',
-            'email': 'kontakt@przykladowa.pl',
-            'adres': 'Ul. Przykładowa 1, 00-001 Miasto',
-            'telefon': '+48 123 456 789',
-            'id': '12345',
-            'company_name': 'Moja Firma',
-            'company_phone': '+48 987 654 321',
-            'company_email': 'biuro@mojafirma.pl',
-            'company_website': 'https://mojafirma.pl',
-            'company_address': 'Ul. Firmowa 10, 00-000 Miasto',
-            'uslugi': 'profesjonalne usługi malarskie',
-        }
-        text = self.template_edit.toPlainText()
-        for key, val in dane.items():
-            text = text.replace(f"{{{key}}}", str(val))
-        text = SendWorker.resolve_spintax(text)
-        QMessageBox.information(self, tr('👁 Podgląd'), text[:3000] + ("..." if len(text) > 3000 else ""))
+        try:
+            from core.workers import SendWorker
+            from core.profile_manager import get_company_info
+
+            # Dane testowe dla podglądu w kreatorze
+            dane = {
+                'firma': 'Przykładowa Firma Sp. z o.o.',
+                'kontakt': 'Jan Kowalski',
+                'email': 'kontakt@przykladowa.pl',
+                'adres': 'Ul. Przykładowa 1, 00-001 Miasto',
+                'telefon': '+48 123 456 789',
+                'id': '12345',
+                'uslugi': 'nasze usługi',
+            }
+
+            # Spróbuj pobrać dane firmy z pól kreatora (jeśli wypełnione)
+            # Przeszukujemy strony kreatora w poszukiwaniu danych
+            wiz = self.wizard()
+            if wiz:
+                for page_id in wiz.pageIds():
+                    page = wiz.page(page_id)
+                    if hasattr(page, 'get_data'):
+                        dane.update(page.get_data())
+
+            text_raw = self.template_edit.toPlainText()
+
+            # Używamy standardowej logiki podstawiania i mieszania
+            text = SendWorker.resolve_spintax(SendWorker.parse_zmienne(text_raw, dane))
+
+            QMessageBox.information(self, tr('👁 Podgląd'), text[:4000] + ("..." if len(text) > 4000 else ""))
+        except Exception as e:
+            QMessageBox.critical(self, tr("Błąd"), f"Nie udało się otworzyć podglądu:\n{str(e)}")
 
     def get_data(self):
         return {
@@ -431,6 +442,7 @@ class SubjectOptionsPage(QWizardPage):
         grp_layout.addWidget(self.mx_check)
 
         self.smime_check = QCheckBox(tr('Podpis S/MIME (wymaga wygenerowanego certyfikatu)'))
+        self.smime_check.setChecked(True)
         grp_layout.addWidget(self.smime_check)
 
         self.attachments_edit = QLineEdit()

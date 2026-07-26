@@ -159,7 +159,8 @@ def init_db_for_profile(profile: Optional[str] = None) -> None:
             password TEXT,
             host TEXT,
             port INTEGER,
-            enabled INTEGER DEFAULT 1
+            enabled INTEGER DEFAULT 1,
+            warmup_only INTEGER DEFAULT 0
         )''')
         c.execute('''CREATE TABLE IF NOT EXISTS ai_suggestions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -262,6 +263,12 @@ def init_db_for_profile(profile: Optional[str] = None) -> None:
         except sqlite3.OperationalError:
             c.execute("ALTER TABLE leads ADD COLUMN data_odpowiedzi TEXT")
             logger.info("Dodano kolumnę data_odpowiedzi do tabeli leads.")
+
+        try:
+            c.execute("SELECT warmup_only FROM smtp_accounts LIMIT 1")
+        except sqlite3.OperationalError:
+            c.execute("ALTER TABLE smtp_accounts ADD COLUMN warmup_only INTEGER DEFAULT 0")
+            logger.info("Dodano kolumnę warmup_only do tabeli smtp_accounts.")
 
         # Domyślny profil przykładowy – tylko jeśli tabela profili jest pusta
         if c.execute("SELECT COUNT(*) FROM profiles").fetchone()[0] == 0:
@@ -466,6 +473,16 @@ def count_sent_today(profile: Optional[str] = None) -> int:
     return row[0]
 
 
+def count_warmup_today(profile: Optional[str] = None) -> int:
+    dzis = datetime.now().date().isoformat()
+    with get_connection_context(profile) as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM wysylki WHERE date(data_wyslania)=? AND status='warmup'",
+            (dzis,)
+        ).fetchone()
+    return row[0]
+
+
 def count_sent_last_hour(profile: Optional[str] = None) -> int:
     godzina_temu = (datetime.now() - timedelta(hours=1)).isoformat()
     with get_connection_context(profile) as conn:
@@ -625,19 +642,20 @@ def save_smtp_accounts(accounts: List[Dict], profile: Optional[str] = None) -> N
         conn.execute("DELETE FROM smtp_accounts")
         for acc in accounts:
             conn.execute(
-                "INSERT INTO smtp_accounts (user, password, host, port, enabled) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO smtp_accounts (user, password, host, port, enabled, warmup_only) VALUES (?, ?, ?, ?, ?, ?)",
                 (acc.get("user", ""), encrypt_text(acc.get("password", ""), profile),
                  acc.get("host", "smtp-relay.gmail.com"), acc.get("port", 587),
-                 1 if acc.get("enabled", True) else 0)
+                 1 if acc.get("enabled", True) else 0,
+                 1 if acc.get("warmup_only", False) else 0)
             )
 
 
 def get_smtp_accounts(profile: Optional[str] = None) -> List[Dict]:
     with get_connection_context(profile) as conn:
-        rows = conn.execute("SELECT id, user, password, host, port, enabled FROM smtp_accounts").fetchall()
+        rows = conn.execute("SELECT id, user, password, host, port, enabled, warmup_only FROM smtp_accounts").fetchall()
     return [{
         "id": r[0], "user": r[1], "password": decrypt_text(r[2], profile),
-        "host": r[3], "port": r[4], "enabled": bool(r[5])
+        "host": r[3], "port": r[4], "enabled": bool(r[5]), "warmup_only": bool(r[6])
     } for r in rows]
 
 # ------------------------------------------------------------------

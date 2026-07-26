@@ -33,6 +33,20 @@ TRASH_FOLDER_HINTS = (
 )
 SPAM_FOLDER_HINTS = ("spam", "junk", "gmail]/spam")
 
+# Domeny, które są wyłącznie przekaźnikami SMTP i nie posiadają skrzynki IMAP
+RELAY_DOMAINS = [
+    "smtp-brevo.com", "sendinblue.com", "amazonses.com", "mailgun.org",
+    "postmarkapp.com", "sparkpost.com"
+]
+
+
+def is_relay_account(email: str) -> bool:
+    """Sprawdza, czy dany e-mail jest adresem technicznym typu relay."""
+    if not email or "@" not in email:
+        return False
+    domain = email.split("@")[-1].lower()
+    return any(rd in domain for rd in RELAY_DOMAINS)
+
 
 @dataclass
 class MailMessage:

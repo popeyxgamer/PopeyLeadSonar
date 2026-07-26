@@ -77,6 +77,11 @@ class SendingView(BaseView):
         btn_save_tmpl.setStyleSheet("background-color: #3d3d3d;")
         row_subj.addWidget(btn_save_tmpl)
 
+        btn_wiz_tmpl = QPushButton(tr("🚀 Kreator Szablonu (AI)"))
+        btn_wiz_tmpl.clicked.connect(self._open_template_wizard)
+        btn_wiz_tmpl.setStyleSheet("background-color: #5e2b8b; font-weight: bold;")
+        row_subj.addWidget(btn_wiz_tmpl)
+
         tmpl_lay.addLayout(row_subj)
         layout.addWidget(tmpl_group)
 
@@ -85,8 +90,8 @@ class SendingView(BaseView):
         opt_lay = QHBoxLayout(opt_group)
         self.dry_run = QCheckBox(tr("🎬 Dry-run")); opt_lay.addWidget(self.dry_run)
         self.html_check = QCheckBox(tr("HTML")); opt_lay.addWidget(self.html_check)
-        self.mx_check = QCheckBox(tr("MX")); opt_lay.addWidget(self.mx_check)
-        self.smime_check = QCheckBox(tr("S/MIME")); opt_lay.addWidget(self.smime_check)
+        self.mx_check = QCheckBox(tr("MX")); self.mx_check.setChecked(True); opt_lay.addWidget(self.mx_check)
+        self.smime_check = QCheckBox(tr("S/MIME")); self.smime_check.setChecked(True); opt_lay.addWidget(self.smime_check)
 
         opt_lay.addStretch()
         opt_lay.addWidget(QLabel(tr("Min Score:")))
@@ -178,6 +183,12 @@ class SendingView(BaseView):
         settings = get_current_profile_settings()
         self.szablon_edit.setPlainText(settings.get("last_template", DEFAULT_TEMPLATE))
         self.temat_edit.setText(settings.get("last_subject", DEFAULT_SUBJECT))
+
+        # Odśwież stan opcji wysyłki
+        self.mx_check.setChecked(settings.get("mx_verify_enabled", True))
+        self.smime_check.setChecked(settings.get("smime_enabled", True))
+        self.html_check.setChecked(settings.get("html_enabled", False))
+
         self.refresh_send_list()
         self.status_label.setText(tr("Profil: {}").format(name))
 
@@ -319,11 +330,78 @@ class SendingView(BaseView):
             db.save_profile(name, p["queries"], p["locations"], self.szablon_edit.toPlainText(), self.temat_edit.text())
             bus.show_message.emit("Sukces", tr("Szablon zapisany w profilu '{}'").format(name))
 
+    def _open_template_wizard(self):
+        """Otwiera kreator szablonu AI."""
+        from ui.widgets.template_wizard import TemplateWizard
+        wiz = TemplateWizard(self)
+        if wiz.exec():
+            result = wiz.field("ai_result")
+            if result:
+                self.szablon_edit.setPlainText(result)
+                bus.show_message.emit("AI", tr("Szablon wklejony do zakładki Wysyłka!"))
+
     def _show_preview(self):
-        dlg = QDialog(self); dlg.setWindowTitle(tr("Podgląd wiadomości")); dlg.resize(600, 400)
-        lay = QVBoxLayout(dlg)
-        text = QTextEdit(); text.setReadOnly(True)
-        text.setPlainText(self.szablon_edit.toPlainText())
-        lay.addWidget(text)
-        btn = QPushButton(tr("Zamknij")); btn.clicked.connect(dlg.accept); lay.addWidget(btn)
-        dlg.exec()
+        """Wyświetla podgląd wiadomości z podstawionymi zmiennymi i spintaxem."""
+        try:
+            from core.workers import SendWorker
+
+            # 1. Przygotuj dane do podstawienia
+            leads = db.get_leads()
+            if leads:
+                l = leads[0]
+                dane = {
+                    'id': str(l[0]), 'firma': l[1] or '', 'kontakt': l[2] or '',
+                    'email': l[3] or '', 'adres': l[4] or '', 'telefon': l[5] or '',
+                    'website': l[6] or '', 'company_name': l[1] or '' # fallback
+                }
+            else:
+                # Dane testowe jeśli baza jest pusta
+                dane = {
+                    'firma': 'Przykładowa Firma Sp. z o.o.', 'kontakt': 'Jan Kowalski',
+                    'email': 'kontakt@przykladowa.pl', 'adres': 'Ul. Wiejska 1, Warszawa',
+                    'telefon': '123-456-789', 'id': '1', 'website': 'www.przyklad.pl'
+                }
+
+            # Dodaj dane firmy z profilu
+            company_info = get_company_info()
+            dane.update(company_info)
+
+            # 2. Przetwórz szablon i temat
+            szablon_raw = self.szablon_edit.toPlainText()
+            temat_raw = self.temat_edit.text()
+
+            # Podstaw zmienne i rozwiąż spintax
+            tresc = SendWorker.resolve_spintax(SendWorker.parse_zmienne(szablon_raw, dane))
+            temat = SendWorker.resolve_spintax(SendWorker.parse_zmienne(temat_raw, dane))
+
+            # 3. Wyświetl okno podglądu
+            dlg = QDialog(self)
+            dlg.setWindowTitle(tr("Podgląd wiadomości"))
+            dlg.resize(700, 500)
+            lay = QVBoxLayout(dlg)
+
+            header_temat = QLabel(tr("Temat:"))
+            header_temat.setStyleSheet("font-weight: bold; color: #4a9eff;")
+            lay.addWidget(header_temat)
+
+            temat_display = QLineEdit()
+            temat_display.setText(temat)
+            temat_display.setReadOnly(True)
+            lay.addWidget(temat_display)
+
+            header_tresc = QLabel(tr("Treść:"))
+            header_tresc.setStyleSheet("font-weight: bold; color: #4a9eff;")
+            lay.addWidget(header_tresc)
+
+            text_display = QTextEdit()
+            text_display.setReadOnly(True)
+            text_display.setPlainText(tresc)
+            lay.addWidget(text_display)
+
+            btn_close = QPushButton(tr("Zamknij"))
+            btn_close.clicked.connect(dlg.accept)
+            lay.addWidget(btn_close)
+
+            dlg.exec_()
+        except Exception as e:
+            QMessageBox.critical(self, tr("Błąd"), f"Nie udało się otworzyć podglądu:\n{str(e)}")

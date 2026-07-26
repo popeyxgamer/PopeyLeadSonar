@@ -3,7 +3,7 @@ from typing import Optional, List, Dict, Any
 from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QFormLayout, QLineEdit, QGroupBox, QPushButton,
     QMessageBox, QScrollArea, QCheckBox, QSpinBox, QWidget, QLabel,
-    QTabWidget, QComboBox, QDoubleSpinBox, QListWidget, QFileDialog, QTextEdit
+    QTabWidget, QComboBox, QDoubleSpinBox, QListWidget, QFileDialog, QTextEdit, QListWidgetItem
 )
 from PySide6.QtCore import Qt
 from ui.views.base_view import BaseView
@@ -166,6 +166,11 @@ class SettingsView(BaseView):
         self.btn_add_acc = QPushButton(tr("➕ Dodaj konto"))
         self.btn_add_acc.clicked.connect(self._show_add_account_dialog)
         btn_rot_row.addWidget(self.btn_add_acc)
+
+        self.btn_toggle_acc = QPushButton(tr("Włącz/Wyłącz zaznaczone"))
+        self.btn_toggle_acc.clicked.connect(self._toggle_account)
+        btn_rot_row.addWidget(self.btn_toggle_acc)
+
         self.btn_del_acc = QPushButton(tr("🗑 Usuń zaznaczone"))
         self.btn_del_acc.clicked.connect(self._remove_account)
         btn_rot_row.addWidget(self.btn_del_acc)
@@ -269,7 +274,17 @@ class SettingsView(BaseView):
         self.accounts_data = db.get_smtp_accounts()
         self.accounts_list.clear()
         for acc in self.accounts_data:
-            self.accounts_list.addItem(f"{acc['user']} @ {acc['host']}")
+            text = f"{acc['user']} @ {acc['host']}"
+            if acc.get("warmup_only"):
+                text += f" [{tr('Tylko do rozgrzewania')}]"
+
+            if not acc.get("enabled", True):
+                text += f" -- {tr('WYŁĄCZONE')} --"
+
+            item = QListWidgetItem(text)
+            if not acc.get("enabled", True):
+                item.setForeground(Qt.gray)
+            self.accounts_list.addItem(item)
 
         # IMAP
         self.imap_enabled.setChecked(settings.get("imap_enabled", False))
@@ -411,14 +426,48 @@ class SettingsView(BaseView):
         port = QLineEdit("587")
         lay.addRow(tr("Port:"), port)
 
+        warmup_only = QCheckBox(tr("Tylko do rozgrzewania (pomijaj w kampaniach)"))
+        warmup_only.setToolTip(tr("Konto oznaczone jako 'Tylko do rozgrzewania' będzie używane przez silnik Warm-up, ale zostanie całkowicie pominięte przy wysyłaniu ofert w kampaniach."))
+        lay.addRow(warmup_only)
+
         btn = QPushButton(tr("Dodaj"))
         btn.clicked.connect(dlg.accept)
         lay.addWidget(btn)
 
         if dlg.exec():
-            acc = {"user": email.text(), "password": pwd.text(), "host": host.text() or "smtp.gmail.com", "port": int(port.text()) if port.text().isdigit() else 587, "enabled": True}
+            acc = {
+                "user": email.text(),
+                "password": pwd.text(),
+                "host": host.text() or "smtp.gmail.com",
+                "port": int(port.text()) if port.text().isdigit() else 587,
+                "enabled": True,
+                "warmup_only": warmup_only.isChecked()
+            }
             self.accounts_data.append(acc)
-            self.accounts_list.addItem(f"{acc['user']} @ {acc['host']}")
+            text = f"{acc['user']} @ {acc['host']}"
+            if acc["warmup_only"]:
+                text += f" [{tr('Tylko do rozgrzewania')}]"
+
+            item = QListWidgetItem(text)
+            self.accounts_list.addItem(item)
+
+    def _toggle_account(self):
+        idx = self.accounts_list.currentRow()
+        if idx >= 0:
+            acc = self.accounts_data[idx]
+            acc["enabled"] = not acc.get("enabled", True)
+
+            # Odśwież widok listy
+            self.accounts_list.clear()
+            for a in self.accounts_data:
+                text = f"{a['user']} @ {a['host']}"
+                if a.get("warmup_only"): text += f" [{tr('Tylko do rozgrzewania')}]"
+                if not a.get("enabled", True): text += f" -- {tr('WYŁĄCZONE')} --"
+                item = QListWidgetItem(text)
+                if not a.get("enabled", True): item.setForeground(Qt.gray)
+                self.accounts_list.addItem(item)
+
+            self.accounts_list.setCurrentRow(idx)
 
     def _remove_account(self):
         idx = self.accounts_list.currentRow()

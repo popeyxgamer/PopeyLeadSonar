@@ -82,7 +82,10 @@ class MainWindow(QMainWindow):
         self._setup_bus_connections()
 
         # Inicjalizacja
-        self._refresh_profile_list()
+        active = self._refresh_profile_list()
+        if active:
+            # Wymuszamy odświeżenie wszystkich widoków informacją o aktualnym profilu
+            QTimer.singleShot(100, lambda: bus.profile_changed.emit(active))
 
         # Wymuszenie odświeżenia Dashboardu na starcie
         QTimer.singleShot(500, lambda: self.content_stack.setCurrentIndex(0))
@@ -158,6 +161,7 @@ class MainWindow(QMainWindow):
             self.profile_selector.setCurrentText(active)
             self.sidebar.set_active_profile(active)
         self.profile_selector.blockSignals(False)
+        return active
 
     def _on_profile_selector_changed(self, name):
         if not name or name == get_current_profile_name(): return
