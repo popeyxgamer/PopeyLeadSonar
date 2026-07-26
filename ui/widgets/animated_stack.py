@@ -20,9 +20,11 @@ class AnimatedStackedWidget(QStackedWidget):
         if index == self.currentIndex() or index < 0 or index >= self.count():
             return
 
+        # Jeśli poprzednia animacja trwa, zatrzymujemy ją i wymuszamy koniec
         if self._is_animating:
             self.animation_group.stop()
-            self._on_animation_finished()
+            self.animation_group.clear()
+            self._is_animating = False
 
         self._next_index = index
         self._current_index = self.currentIndex()
@@ -34,14 +36,13 @@ class AnimatedStackedWidget(QStackedWidget):
             super().setCurrentIndex(index)
             return
 
-        # Ustawienie geometrii dla obu
         w, h = self.width(), self.height()
         if w <= 0 or h <= 0:
             super().setCurrentIndex(index)
             return
 
+        # Przygotuj widgety do animacji
         next_w.setGeometry(0, 0, w, h)
-
         direction = "up" if index > self._current_index else "down"
         offset = h if direction == "up" else -h
 
@@ -49,7 +50,7 @@ class AnimatedStackedWidget(QStackedWidget):
         next_w.show()
         next_w.raise_()
 
-        # Animacja wejścia nowego
+        # Animacja wejścia nowego (tworzymy nowe obiekty animacji)
         anim_next = QPropertyAnimation(next_w, b"pos", self)
         anim_next.setDuration(self.duration)
         anim_next.setEasingCurve(self.easing)

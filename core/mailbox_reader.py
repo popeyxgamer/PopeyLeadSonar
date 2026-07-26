@@ -188,7 +188,7 @@ def fetch_recent_messages(
         status, _ = conn.select(f'"{folder}"', readonly=True)
         if status != "OK":
             conn.logout()
-            return False, [], f"Nie można otworzyć folderu {folder}"
+            return False, [], f"Nie można otworzyć folderu {folder}. Sprawdź czy istnieje."
 
         status, data = conn.search(None, "ALL")
         if status != "OK":
@@ -201,36 +201,44 @@ def fetch_recent_messages(
 
         messages = []
         for msg_id in msg_ids:
-            status, msg_data = conn.fetch(
-                msg_id, "(FLAGS BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])"
-            )
-            if status != "OK" or not msg_data or not msg_data[0]:
-                continue
-            flags_part = msg_data[0][0].decode("utf-8", errors="ignore")
-            seen = "\\Seen" in flags_part
-            raw_headers = msg_data[0][1]
-            msg = message_from_bytes(raw_headers, policy=default)
-
-            date_str = msg.get("Date", "")
             try:
-                dt = parsedate_to_datetime(date_str)
-                date_display = dt.strftime("%Y-%m-%d %H:%M")
-            except (TypeError, ValueError):
-                date_display = date_str[:16]
+                status, msg_data = conn.fetch(
+                    msg_id, "(FLAGS BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])"
+                )
+                if status != "OK" or not msg_data or not msg_data[0]:
+                    continue
+                flags_part = msg_data[0][0].decode("utf-8", errors="ignore")
+                seen = "\\Seen" in flags_part
+                raw_headers = msg_data[0][1]
+                msg = message_from_bytes(raw_headers, policy=default)
 
-            messages.append(MailMessage(
-                uid=msg_id.decode() if isinstance(msg_id, bytes) else str(msg_id),
-                sender=_decode(msg.get("From", "")),
-                subject=_decode(msg.get("Subject", "(brak tematu)")),
-                date=date_display,
-                snippet="",
-                seen=seen,
-            ))
+                date_str = msg.get("Date", "")
+                try:
+                    dt = parsedate_to_datetime(date_str)
+                    date_display = dt.strftime("%Y-%m-%d %H:%M")
+                except (TypeError, ValueError):
+                    date_display = date_str[:16]
+
+                messages.append(MailMessage(
+                    uid=msg_id.decode() if isinstance(msg_id, bytes) else str(msg_id),
+                    sender=_decode(msg.get("From", "")),
+                    subject=_decode(msg.get("Subject", "(brak tematu)")),
+                    date=date_display,
+                    snippet="",
+                    seen=seen,
+                ))
+            except Exception as e:
+                logger.warning("Błąd fetch pojedynczej wiadomości: %s", e)
 
         conn.logout()
         return True, messages, ""
-    except imaplib.IMAP4.error as e:
-        return False, [], f"Błąd logowania IMAP: {e}"
+    except (imaplib.IMAP4.error, socket.error) as e:
+        err_msg = str(e)
+        if "getaddrinfo failed" in err_msg:
+            return False, [], "Błąd DNS: Nie można znaleźć serwera IMAP. Sprawdź adres hosta."
+        if "authentication failed" in err_msg.lower() or "login failure" in err_msg.lower():
+            return False, [], "Błąd logowania: Nieprawidłowy e-mail lub hasło aplikacji."
+        return False, [], f"Błąd połączenia IMAP: {err_msg}"
     except Exception as e:
         logger.warning("Błąd odczytu skrzynki IMAP: %s", e)
         return False, [], str(e)

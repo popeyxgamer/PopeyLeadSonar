@@ -174,12 +174,28 @@ class MainWindow(QMainWindow):
             self.sidebar.set_active_profile(name)
             bus.profile_changed.emit(name) # To wyzwoli load_settings we wszystkich widokach
 
-    def _stop_all_workers(self):
+    def _stop_all_workers(self, wait=False):
         """Zatrzymuje wszystkich workerów we wszystkich widokach."""
         for view in self.views.values():
-            if hasattr(view, 'worker') and view.worker: view.worker.stop()
-            if hasattr(view, 'search_worker') and view.search_worker: view.search_worker.stop()
-            if hasattr(view, 'send_worker') and view.send_worker: view.send_worker.stop()
+            for attr in ['worker', 'search_worker', 'send_worker', 'body_worker', 'action_worker', 'batch_worker']:
+                if hasattr(view, attr):
+                    w = getattr(view, attr)
+                    if w and w.isRunning():
+                        w.stop()
+                        if wait:
+                            w.wait(2000) # Czekaj maks 2 sekundy
+
+        if self.seq_worker and self.seq_worker.isRunning():
+            self.seq_worker.stop()
+            if wait:
+                self.seq_worker.wait(2000)
+
+    def closeEvent(self, event):
+        """Obsługa zamykania aplikacji - upewniamy się, że wątki kończą pracę."""
+        self.statusBar().showMessage(tr("Zamykanie aplikacji..."), 5000)
+        self._stop_all_workers(wait=True)
+        db.close_all_connections()
+        event.accept()
 
     def _on_profile_changed(self, name):
         self.setWindowTitle(f"PopeyLeadSonar v2.0 – 🎯 {name}")

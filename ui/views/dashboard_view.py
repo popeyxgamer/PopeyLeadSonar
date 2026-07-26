@@ -150,29 +150,49 @@ class DashboardView(BaseView):
         try:
             if self.canvas:
                 self.chart_lay.removeWidget(self.canvas)
+                # Używamy matplotlib.pyplot.close, aby zwolnić zasoby graficzne
+                import matplotlib.pyplot as plt
+                plt.close(self.canvas.figure)
                 self.canvas.deleteLater()
+                self.canvas = None
 
             # Pobieramy dane z ostatnich 7 dni
             end = datetime.now()
             start = end - timedelta(days=7)
 
-            # Pobranie danych z bazy (uproszczone pobieranie)
+            # Pobranie danych z bazy
             days = [(start + timedelta(days=i)).date().isoformat() for i in range(8)]
-            data_sent = [0] * 8
-            data_resp = [0] * 8
+
+            # Pobieramy rzeczywiste statystyki z bazy dla każdego dnia
+            data_sent = []
+            data_resp = []
+            for d in days:
+                with db.get_connection_context() as conn:
+                    s = conn.execute("SELECT COUNT(*) FROM wysylki WHERE date(data_wyslania)=? AND status='wysłano'", (d,)).fetchone()[0]
+                    r = conn.execute("SELECT COUNT(*) FROM wysylki WHERE date(data_wyslania)=? AND status='responded'", (d,)).fetchone()[0]
+                    data_sent.append(s)
+                    data_resp.append(r)
 
             fig = Figure(figsize=(8, 4), dpi=100, facecolor=COLOR_BG)
             ax = fig.add_subplot(111)
             ax.set_facecolor(COLOR_BG)
 
             import numpy as np
-            x = range(len(days))
-            ax.bar(x, data_sent, color=COLOR_ACCENT, alpha=0.5)
-            ax.bar(x, data_resp, color=COLOR_WARNING, alpha=0.5)
+            x = np.arange(len(days))
+            width = 0.35
+
+            ax.bar(x - width/2, data_sent, width, label=tr('Wysłano'), color=COLOR_ACCENT, alpha=0.8)
+            ax.bar(x + width/2, data_resp, width, label=tr('Odpowiedzi'), color=COLOR_WARNING, alpha=0.8)
 
             ax.set_xticks(x)
-            ax.set_xticklabels(days, rotation=45, ha='right', color='white', fontsize=8)
+            ax.set_xticklabels([d[5:] for d in days], rotation=0, color='white', fontsize=9)
             ax.tick_params(colors='white')
+            ax.spines['bottom'].set_color(COLOR_BORDER)
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.spines['left'].set_color(COLOR_BORDER)
+
+            ax.legend(facecolor=COLOR_SURFACE, edgecolor=COLOR_BORDER, labelcolor='white')
 
             fig.tight_layout()
             self.canvas = FigureCanvasQTAgg(fig)
