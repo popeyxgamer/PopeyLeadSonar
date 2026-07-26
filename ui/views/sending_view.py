@@ -118,8 +118,15 @@ class SendingView(BaseView):
         list_lay.addWidget(self.send_list)
 
         btn_row = QHBoxLayout()
-        btn_sel_all = QPushButton(tr("Zaznacz wszystkie")); btn_sel_all.clicked.connect(self.send_list.selectAll); btn_row.addWidget(btn_sel_all)
-        btn_sel_new = QPushButton(tr("Tylko nowe")); btn_sel_new.clicked.connect(self.select_new_only); btn_row.addWidget(btn_sel_new)
+        btn_sel_all = QPushButton(tr("Zaznacz wszystkie"))
+        btn_sel_all.setStyleSheet("background-color: #313244; border: 1px solid #89b4fa; padding: 5px;")
+        btn_sel_all.clicked.connect(self.send_list.selectAll)
+        btn_row.addWidget(btn_sel_all)
+
+        btn_sel_new = QPushButton(tr("🆕 Tylko nowe"))
+        btn_sel_new.setStyleSheet("background-color: #313244; border: 1px solid #89b4fa; padding: 5px; font-weight: bold;")
+        btn_sel_new.clicked.connect(self.select_new_only)
+        btn_row.addWidget(btn_sel_new)
         list_lay.addLayout(btn_row)
         layout.addWidget(list_group)
 
