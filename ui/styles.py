@@ -97,7 +97,7 @@ QComboBox::down-arrow {{
 QPushButton {{
     background-color: {COLOR_OVERLAY};
     color: {COLOR_TEXT};
-    border: none;
+    border: 1px solid {COLOR_ACCENT};
     border-radius: 8px;
     padding: 10px 20px;
     font-weight: 600;
@@ -106,6 +106,7 @@ QPushButton {{
 QPushButton:hover {{
     background-color: {COLOR_ACCENT};
     color: {COLOR_BG};
+    border: 1px solid {COLOR_ACCENT};
 }}
 
 QPushButton:pressed {{
