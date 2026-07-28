@@ -17,6 +17,33 @@ from .config import (
 from .database import init_db_for_profile, close_all_connections
 
 
+def migrate_old_account_to_db(profile: str) -> None:
+    """Migruje dane konta z pliku settings.json do bazy danych, jeśli tabela jest pusta."""
+    from .database import get_smtp_accounts, save_smtp_accounts
+
+    # Sprawdź czy już mamy jakieś konta w bazie
+    if get_smtp_accounts(profile):
+        return
+
+    # Pobierz stare dane z pliku
+    settings = load_profile_settings(profile)
+    old_user = settings.get("gmail_user")
+    old_pass = settings.get("gmail_password")
+
+    if old_user and old_pass:
+        logger.info("Migracja starego konta %s do bazy danych dla profilu %s", old_user, profile)
+        accounts = [{
+            "user": old_user,
+            "password": old_pass,
+            "host": settings.get("smtp_host", "smtp.gmail.com"),
+            "port": settings.get("smtp_port", 587),
+            "enabled": True,
+            "warmup_only": False,
+            "is_main": True
+        }]
+        save_smtp_accounts(accounts, profile)
+
+
 def switch_profile(name: str) -> bool:
     """Przełącza aktywny profil – zamyka stare połączenia, inicjuje nowy."""
     if not profile_exists(name):
@@ -29,6 +56,10 @@ def switch_profile(name: str) -> bool:
     close_all_connections()
     set_active_profile(name)
     init_db_for_profile(name)
+
+    # URUCHOM MIGRACJĘ
+    migrate_old_account_to_db(name)
+
     from .config import setup_profile_logging as setup_log
     new_logger = setup_log(name)
 
