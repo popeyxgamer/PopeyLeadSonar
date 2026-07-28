@@ -83,6 +83,8 @@ class MainWindow(QMainWindow):
 
         # Inicjalizacja
         active = self._refresh_profile_list()
+        self._refresh_account_list()
+
         if active:
             # Wymuszamy odświeżenie wszystkich widoków informacją o aktualnym profilu
             QTimer.singleShot(100, lambda: bus.profile_changed.emit(active))
@@ -93,6 +95,7 @@ class MainWindow(QMainWindow):
 
     def _setup_bus_connections(self):
         bus.profile_changed.connect(self._on_profile_changed)
+        bus.profile_changed.connect(self._refresh_account_list)
         bus.show_message.connect(self._show_toast)
 
         # Inicjalizacja workera sekwencji dla domyślnego profilu
@@ -122,14 +125,27 @@ class MainWindow(QMainWindow):
         toolbar.setStyleSheet(f"QToolBar {{ background-color: {COLOR_BG}; border-bottom: 1px solid {COLOR_BORDER}; padding: 5px; }}")
         self.addToolBar(toolbar)
 
+        # Sekcja Profilu
         label = QLabel(tr('  📁 Profil:  '))
         label.setStyleSheet(f"color: {COLOR_ACCENT}; font-weight: bold;")
         toolbar.addWidget(label)
 
         self.profile_selector = QComboBox()
-        self.profile_selector.setMinimumWidth(220)
+        self.profile_selector.setMinimumWidth(200)
         self.profile_selector.currentTextChanged.connect(self._on_profile_selector_changed)
         toolbar.addWidget(self.profile_selector)
+
+        toolbar.addSeparator()
+
+        # Sekcja Konta
+        label_acc = QLabel(tr('  📧 Konto:  '))
+        label_acc.setStyleSheet(f"color: {COLOR_SECONDARY}; font-weight: bold;")
+        toolbar.addWidget(label_acc)
+
+        self.account_selector = QComboBox()
+        self.account_selector.setMinimumWidth(250)
+        self.account_selector.currentIndexChanged.connect(self._on_account_selector_changed)
+        toolbar.addWidget(self.account_selector)
 
         toolbar.addSeparator()
 
@@ -162,6 +178,37 @@ class MainWindow(QMainWindow):
             self.sidebar.set_active_profile(active)
         self.profile_selector.blockSignals(False)
         return active
+
+    def _refresh_account_list(self):
+        """Odświeża listę kont w toolbarze."""
+        self.account_selector.blockSignals(True)
+        self.account_selector.clear()
+
+        accounts = db.get_smtp_accounts()
+        if not accounts:
+            self.account_selector.addItem(tr("-- Brak kont SMTP --"), None)
+        else:
+            main_idx = 0
+            for i, acc in enumerate(accounts):
+                text = acc["user"]
+                if acc.get("warmup_only"): text += f" [{tr('Tylko do rozgrzewania')}]"
+                if not acc.get("enabled", True): text += f" [{tr('WYŁĄCZONE')}]"
+
+                self.account_selector.addItem(text, acc["user"])
+                if acc.get("is_main"): main_idx = i
+
+            self.account_selector.setCurrentIndex(main_idx)
+
+        self.account_selector.blockSignals(False)
+
+    def _on_account_selector_changed(self, index):
+        email = self.account_selector.currentData()
+        if not email: return
+
+        if db.set_main_account(email):
+            logger.info("MainWindow: Zmieniono główne konto na %s", email)
+            # Powiadamiamy wszystkie widoki, że "ustawienia profilu" (czyli też konto) się zmieniły
+            bus.profile_changed.emit(get_current_profile_name())
 
     def _on_profile_selector_changed(self, name):
         if not name or name == get_current_profile_name(): return

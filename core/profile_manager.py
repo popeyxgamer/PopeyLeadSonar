@@ -40,7 +40,21 @@ def get_current_profile_settings() -> Dict[str, Any]:
     profile = get_active_profile()
     if not profile:
         return {}
-    return load_profile_settings(profile)
+
+    settings = load_profile_settings(profile)
+
+    # Próba nadpisania głównym kontem z bazy (obsługa wielu kont)
+    from .database import get_smtp_accounts
+    accounts = get_smtp_accounts(profile)
+    main_acc = next((a for a in accounts if a.get("is_main")), None)
+
+    if main_acc:
+        settings["gmail_user"] = main_acc["user"]
+        settings["gmail_password"] = main_acc["password"]
+        settings["smtp_host"] = main_acc["host"]
+        settings["smtp_port"] = main_acc["port"]
+
+    return settings
 
 
 def update_current_profile_settings(settings: Dict[str, Any]) -> None:

@@ -82,14 +82,29 @@ class SettingsView(BaseView):
         lang_form.addStretch()
         form.addWidget(lang_group)
 
-        # Gmail
-        gmail_group = QGroupBox(tr("🔐 Główne konto Gmail"))
+        # Gmail (Teraz jako wybór z listy)
+        gmail_group = QGroupBox(tr("🔐 Aktywne konto wysyłkowe"))
         gmail_form = QFormLayout(gmail_group)
+
+        self.active_account_combo = QComboBox()
+        self.active_account_combo.currentIndexChanged.connect(self._on_active_account_selection_changed)
+        gmail_form.addRow(tr('Wybierz konto:'), self.active_account_combo)
+
         self.gmail_user = QLineEdit()
+        self.gmail_user.setReadOnly(True)
+        self.gmail_user.setStyleSheet("background-color: #242437; color: #888;")
         gmail_form.addRow(tr('Adres Gmail:'), self.gmail_user)
+
         self.gmail_pass = QLineEdit()
+        self.gmail_pass.setReadOnly(True)
         self.gmail_pass.setEchoMode(QLineEdit.Password)
+        self.gmail_pass.setStyleSheet("background-color: #242437; color: #888;")
         gmail_form.addRow(tr('Hasło aplikacji:'), self.gmail_pass)
+
+        hint_acc = QLabel(tr("ℹ️ Kontami zarządzasz w zakładce 'Zaawansowane'."))
+        hint_acc.setStyleSheet("color: #888; font-size: 11px;")
+        gmail_form.addRow(hint_acc)
+
         form.addWidget(gmail_group)
 
         # Company
@@ -245,9 +260,29 @@ class SettingsView(BaseView):
         idx = SUPPORTED_LANGUAGES.index(get_language()) if get_language() in SUPPORTED_LANGUAGES else 0
         self.language_combo.setCurrentIndex(idx)
 
-        # Podstawowe
-        self.gmail_user.setText(settings.get("gmail_user", ""))
-        self.gmail_pass.setText(settings.get("gmail_password", ""))
+        # Konta (do dropdownu w zakładce Podstawowe)
+        self.accounts_data = db.get_smtp_accounts()
+        self.active_account_combo.blockSignals(True)
+        self.active_account_combo.clear()
+
+        main_idx = -1
+        for i, acc in enumerate(self.accounts_data):
+            self.active_account_combo.addItem(acc["user"], acc["user"])
+            if acc.get("is_main"): main_idx = i
+
+        if main_idx >= 0:
+            self.active_account_combo.setCurrentIndex(main_idx)
+            # Wyświetl dane aktualnego konta
+            acc = self.accounts_data[main_idx]
+            self.gmail_user.setText(acc["user"])
+            self.gmail_pass.setText(acc["password"])
+        else:
+            self.gmail_user.setText(tr("-- brak --"))
+            self.gmail_pass.setText("")
+
+        self.active_account_combo.blockSignals(False)
+
+        # Firma
         self.company_name.setText(settings.get("company_name", ""))
         self.company_address.setText(settings.get("company_address", ""))
         self.company_phone.setText(settings.get("company_phone", ""))
@@ -311,8 +346,6 @@ class SettingsView(BaseView):
             set_language(new_lang)
 
         settings.update({
-            "gmail_user": self.gmail_user.text().strip(),
-            "gmail_password": self.gmail_pass.text(),
             "company_name": self.company_name.text().strip(),
             "company_address": self.company_address.text().strip(),
             "company_phone": self.company_phone.text().strip(),
@@ -336,6 +369,11 @@ class SettingsView(BaseView):
 
         update_current_profile_settings(settings)
         db.save_smtp_accounts(self.accounts_data)
+
+        # Ustaw aktywne konto jako główne w bazie danych
+        email = self.active_account_combo.currentData()
+        if email:
+            db.set_main_account(email)
 
         # Bounce monitor refresh
         if settings["imap_enabled"] and settings["imap_user"] and settings["imap_password"]:
@@ -367,6 +405,16 @@ class SettingsView(BaseView):
             restart_app()
         else:
             bus.show_message.emit(tr("Sukces"), tr("Ustawienia zostały zapisane!"))
+
+    def _on_active_account_selection_changed(self, idx):
+        if idx >= 0 and idx < len(self.accounts_data):
+            acc = self.accounts_data[idx]
+            self.gmail_user.setText(acc["user"])
+            self.gmail_pass.setText(acc["password"])
+
+            # W opcjach zaawansowanych ustaw host i port (informacyjnie)
+            self.smtp_host.setText(acc["host"])
+            self.smtp_port.setText(str(acc["port"]))
 
     def _apply_smtp_mode(self, idx):
         if idx == 0:
