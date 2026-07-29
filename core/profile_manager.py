@@ -18,30 +18,40 @@ from .database import init_db_for_profile, close_all_connections
 
 
 def migrate_old_account_to_db(profile: str) -> None:
-    """Migruje dane konta z pliku settings.json do bazy danych, jeśli tabela jest pusta."""
+    """Migruje dane konta z pliku settings.json do bazy danych, jeśli go tam nie ma."""
     from .database import get_smtp_accounts, save_smtp_accounts
-
-    # Sprawdź czy już mamy jakieś konta w bazie
-    if get_smtp_accounts(profile):
-        return
 
     # Pobierz stare dane z pliku
     settings = load_profile_settings(profile)
     old_user = settings.get("gmail_user")
     old_pass = settings.get("gmail_password")
 
-    if old_user and old_pass:
-        logger.info("Migracja starego konta %s do bazy danych dla profilu %s", old_user, profile)
-        accounts = [{
-            "user": old_user,
-            "password": old_pass,
-            "host": settings.get("smtp_host", "smtp.gmail.com"),
-            "port": settings.get("smtp_port", 587),
-            "enabled": True,
-            "warmup_only": False,
-            "is_main": True
-        }]
-        save_smtp_accounts(accounts, profile)
+    if not old_user or not old_pass:
+        return
+
+    # Sprawdź czy ten konkretny użytkownik jest już w bazie
+    existing_accounts = get_smtp_accounts(profile)
+    if any(a['user'].lower() == old_user.lower() for a in existing_accounts):
+        return
+
+    logger.info("Migracja brakującego konta %s do bazy danych dla profilu %s", old_user, profile)
+
+    # Jeśli to pierwsze konto w bazie, ustaw je jako główne
+    is_main = len(existing_accounts) == 0
+
+    new_acc = {
+        "user": old_user,
+        "password": old_pass,
+        "host": settings.get("smtp_host", "smtp.gmail.com"),
+        "port": settings.get("smtp_port", 587),
+        "enabled": True,
+        "warmup_only": False,
+        "is_main": is_main
+    }
+
+    # Pobieramy obecne konta i dodajemy nowe
+    updated_list = existing_accounts + [new_acc]
+    save_smtp_accounts(updated_list, profile)
 
 
 def switch_profile(name: str) -> bool:

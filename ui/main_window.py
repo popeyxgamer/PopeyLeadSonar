@@ -14,7 +14,8 @@ from core import database as db
 from core.signal_bus import bus
 from core.profile_manager import (
     get_all_profiles, get_current_profile_name, switch_profile,
-    create_new_profile, delete_profile_by_name, copy_profile, get_profile_path
+    create_new_profile, delete_profile_by_name, copy_profile, get_profile_path,
+    get_current_profile_settings
 )
 from ui.sidebar import Sidebar
 from ui.widgets.animated_stack import AnimatedStackedWidget
@@ -28,9 +29,9 @@ from ui.views.inbox_view import InboxView
 from ui.views.history_view import HistoryView
 from ui.views.ai_lab_view import AILabView
 from ui.views.settings_view import SettingsView
-from ui.styles import DARK_STYLESHEET, DEFAULT_PROFILE_NAME, COLOR_BG, COLOR_BORDER, COLOR_ACCENT, COLOR_ERROR
+from ui.styles import DARK_STYLESHEET, DEFAULT_PROFILE_NAME, COLOR_BG, COLOR_BORDER, COLOR_ACCENT, COLOR_ERROR, COLOR_SECONDARY
 from ui.i18n import tr
-from core.config import logger, get_current_profile_settings
+from core.config import logger
 from core.workers import SequenceWorker
 
 class MainWindow(QMainWindow):
@@ -179,7 +180,7 @@ class MainWindow(QMainWindow):
         self.profile_selector.blockSignals(False)
         return active
 
-    def _refresh_account_list(self):
+    def _refresh_account_list(self, _profile_name=None):
         """Odświeża listę kont w toolbarze."""
         self.account_selector.blockSignals(True)
         self.account_selector.clear()

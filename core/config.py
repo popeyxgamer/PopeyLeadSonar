@@ -435,10 +435,3 @@ def get_abs_session_cap(host: str, custom_cap: Optional[int] = None) -> int:
         return min(int(custom_cap), CUSTOM_SESSION_CAP_MAX)
     return CUSTOM_SESSION_CAP_DEFAULT
 
-def get_current_profile_settings() -> Dict[str, Any]:
-    profile = get_active_profile() or DEFAULT_PROFILE_NAME
-    return load_profile_settings(profile)
-
-def update_current_profile_settings(settings: Dict[str, Any]) -> None:
-    profile = get_active_profile() or DEFAULT_PROFILE_NAME
-    save_profile_settings(profile, settings)

@@ -12,12 +12,12 @@ from .config import (
     SESSION_HARD_CAP, SMTP_RELAY_HOST, SMTP_RELAY_PORT, SMTP_TEMP_FAIL_PAUSE,
     get_abs_session_cap, get_send_delay, logger,
     ACCOUNT_ROTATION_ENABLED_DEFAULT, ACCOUNT_ROTATION_MAX_PER_ACCOUNT,
-    HTML_EMAIL_ENABLED_DEFAULT, get_current_profile_settings
+    HTML_EMAIL_ENABLED_DEFAULT
 )
+from .profile_manager import get_company_info, get_current_profile_settings
 from .email_sender import wyslij_email
 from .scraping import search_companies_web, fetch_page_text
 from .account_rotator import SMTPAccountRotator
-from .profile_manager import get_company_info
 from .ai_features import LeadScorer, LeadPersonalizer
 from .signal_bus import bus
 from ui.i18n import tr
