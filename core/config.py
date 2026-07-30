@@ -256,7 +256,7 @@ def set_profile_setting(key: str, value: Any, profile: Optional[str] = None) -> 
 # Sieć / scraping
 REQUEST_TIMEOUT = 5
 MAX_ASYNC_CONCURRENT = 12
-ASYNC_GLOBAL_TIMEOUT = 45
+ASYNC_GLOBAL_TIMEOUT = 60
 MAX_HTML_SIZE = 500_000
 SEARCH_DELAY_RANGE = (2, 4)
 DOMAIN_CACHE_MAX_AGE_DAYS = 30

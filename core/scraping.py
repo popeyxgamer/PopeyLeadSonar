@@ -316,26 +316,33 @@ async def _fetch_data_from_domain(client: httpx.AsyncClient, domain: str) -> Tup
 
 
 async def _fetch_all_data(domains: List[str], proxies: Optional[List[str]] = None) -> Dict[str, Dict]:
-    # Im więcej proxy, tym większa dopuszczalna równoległość
-    proxy_count = len(proxies) if proxies else 1
-    max_concurrent = MAX_ASYNC_CONCURRENT * min(proxy_count, 5) # Maksymalnie 5-krotne przyspieszenie
+    proxy_list = list(proxies) if proxies else []
 
-    limits = httpx.Limits(max_connections=max_concurrent)
+    # Formuła Turbo: Moc = Baza * (Proxy + 1)
+    max_concurrent = MAX_ASYNC_CONCURRENT * (len(proxy_list) + 1)
+    # Twardy sufit 150 połączeń, żeby nie przekroczyć limitów systemu operacyjnego
+    max_concurrent = min(max_concurrent, 150)
+
     semaphore = asyncio.Semaphore(max_concurrent)
 
-    # Przygotuj pulę klientów (jeden klient na proxy) dla lepszej wydajności
-    proxy_pool = list(proxies) if proxies else [None]
+    # Tworzymy pulę klientów - każdy ze swoim proxy (lub lokalnym IP)
+    # Dzięki temu mamy prawdziwą rotację adresów IP dla każdego zapytania
+    clients = []
+    # 1. Dodaj klienta lokalnego (bez proxy)
+    clients.append(httpx.AsyncClient(headers=_random_headers(), follow_redirects=True, timeout=REQUEST_TIMEOUT))
 
-    async with httpx.AsyncClient(headers=_random_headers(), limits=limits, follow_redirects=True) as client:
-        async def sem_worker(domain: str, p_idx: int):
+    # 2. Dodaj klientów dla każdego proxy
+    for p in proxy_list:
+        try:
+            clients.append(httpx.AsyncClient(proxy=p, headers=_random_headers(), follow_redirects=True, timeout=REQUEST_TIMEOUT))
+        except Exception as e:
+            logger.warning("Błędny format proxy %s: %s", p, e)
+
+    try:
+        async def sem_worker(domain: str, worker_idx: int):
             async with semaphore:
-                # Wybierz proxy dla tego konkretnego żądania (rotacja)
-                current_proxy = proxy_pool[p_idx % len(proxy_pool)]
-
-                # Uwaga: httpx AsyncClient nie pozwala na zmianę proxy per-request łatwo w starej wersji,
-                # ale my używamy rotacji wewnątrz, tworząc requesty z przypisanym transportem lub po prostu rotując klientów.
-                # Dla uproszczenia i stabilności: jeśli jest lista proxy, będziemy używać rotacji adresów w logach
-                # i wysyłać zapytania szerokim frontem.
+                # Wybierz klienta z puli (rotacja Round-Robin)
+                client = clients[worker_idx % len(clients)]
                 return await _fetch_data_from_domain(client, domain)
 
         tasks = [asyncio.create_task(sem_worker(domain, i)) for i, domain in enumerate(domains)]
@@ -346,6 +353,13 @@ async def _fetch_all_data(domains: List[str], proxies: Optional[List[str]] = Non
             if isinstance(res, tuple):
                 valid_results[res[0]] = {"email": res[1], "socials": res[2]}
         return valid_results
+    finally:
+        # Zamykamy wszystkich klientów
+        for c in clients:
+            try:
+                await c.aclose()
+            except Exception:
+                pass
 
 
 def _run_async_fetch(domains: List[str], proxies: Optional[List[str]] = None) -> Dict[str, Dict]:
@@ -443,8 +457,12 @@ def _extract_links_bing(query: str, location: str, limit: int,
 
 def _run_single_engine(engine_fn, query: str, location: str, limit: int,
                         proxy: Optional[str] = None) -> List[Dict[str, str]]:
-    """Losowe opóźnienie (jitter) przed strzałem do danego silnika, potem samo zapytanie."""
-    time.sleep(random.uniform(*SEARCH_DELAY_RANGE))
+    """Wykonuje zapytanie do silnika. Jeśli używamy proxy, pomijamy opóźnienie dla prędkości."""
+    if not proxy:
+        time.sleep(random.uniform(*SEARCH_DELAY_RANGE))
+    else:
+        # Minimalny jitter dla proxy, żeby nie uderzać idealnie w tej samej milisekundzie
+        time.sleep(random.uniform(0.1, 0.5))
     return engine_fn(query, location, limit, proxy)
 
 
