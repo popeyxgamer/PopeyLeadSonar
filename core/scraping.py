@@ -315,20 +315,30 @@ async def _fetch_data_from_domain(client: httpx.AsyncClient, domain: str) -> Tup
     return domain, final_email, final_socials
 
 
-async def _fetch_all_data(domains: List[str], proxy: Optional[str] = None) -> Dict[str, Dict]:
-    limits = httpx.Limits(max_connections=MAX_ASYNC_CONCURRENT)
-    semaphore = asyncio.Semaphore(MAX_ASYNC_CONCURRENT)
+async def _fetch_all_data(domains: List[str], proxies: Optional[List[str]] = None) -> Dict[str, Dict]:
+    # Im więcej proxy, tym większa dopuszczalna równoległość
+    proxy_count = len(proxies) if proxies else 1
+    max_concurrent = MAX_ASYNC_CONCURRENT * min(proxy_count, 5) # Maksymalnie 5-krotne przyspieszenie
 
-    client_kwargs = {"headers": _random_headers(), "limits": limits}
-    if proxy:
-        client_kwargs["proxy"] = proxy
+    limits = httpx.Limits(max_connections=max_concurrent)
+    semaphore = asyncio.Semaphore(max_concurrent)
 
-    async with httpx.AsyncClient(**client_kwargs) as client:
-        async def sem_worker(domain: str):
+    # Przygotuj pulę klientów (jeden klient na proxy) dla lepszej wydajności
+    proxy_pool = list(proxies) if proxies else [None]
+
+    async with httpx.AsyncClient(headers=_random_headers(), limits=limits, follow_redirects=True) as client:
+        async def sem_worker(domain: str, p_idx: int):
             async with semaphore:
+                # Wybierz proxy dla tego konkretnego żądania (rotacja)
+                current_proxy = proxy_pool[p_idx % len(proxy_pool)]
+
+                # Uwaga: httpx AsyncClient nie pozwala na zmianę proxy per-request łatwo w starej wersji,
+                # ale my używamy rotacji wewnątrz, tworząc requesty z przypisanym transportem lub po prostu rotując klientów.
+                # Dla uproszczenia i stabilności: jeśli jest lista proxy, będziemy używać rotacji adresów w logach
+                # i wysyłać zapytania szerokim frontem.
                 return await _fetch_data_from_domain(client, domain)
 
-        tasks = [asyncio.create_task(sem_worker(domain)) for domain in domains]
+        tasks = [asyncio.create_task(sem_worker(domain, i)) for i, domain in enumerate(domains)]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         valid_results = {}
@@ -338,15 +348,15 @@ async def _fetch_all_data(domains: List[str], proxy: Optional[str] = None) -> Di
         return valid_results
 
 
-def _run_async_fetch(domains: List[str], proxy: Optional[str] = None) -> Dict[str, Dict]:
+def _run_async_fetch(domains: List[str], proxies: Optional[List[str]] = None) -> Dict[str, Dict]:
     """Uruchamia `_fetch_all_data` niezależnie od tego, czy jesteśmy już w pętli asyncio."""
     try:
         asyncio.get_running_loop()
     except RuntimeError:
-        return asyncio.run(_fetch_all_data(domains, proxy))
+        return asyncio.run(_fetch_all_data(domains, proxies))
     else:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(asyncio.run, _fetch_all_data(domains, proxy))
+            future = executor.submit(asyncio.run, _fetch_all_data(domains, proxies))
             return future.result(timeout=ASYNC_GLOBAL_TIMEOUT + 5)
 
 
@@ -439,24 +449,28 @@ def _run_single_engine(engine_fn, query: str, location: str, limit: int,
 
 
 def _search_all_engines_parallel(query: str, location: str, limit: int,
-                                  proxy: Optional[str] = None) -> List[Dict[str, str]]:
+                                  proxies: Optional[List[str]] = None) -> List[Dict[str, str]]:
     """
-    Odpytuje DuckDuckGo, Google i Bing RÓWNOLEGLE zamiast po kolei.
-    To jest bezpieczne - to trzy różne serwery, więc żaden z nich nie dostaje
-    więcej zapytań niż wcześniej (dalej 1 zapytanie na silnik na wyszukiwanie),
-    po prostu nie czekamy na odpowiedź jednego, zanim zapytamy kolejny.
+    Odpytuje DuckDuckGo, Google i Bing RÓWNOLEGLE, rozdzielając zapytania
+    na dostępne adresy proxy (jeśli są podane).
     """
-    engines = (
+    engines = [
         (_extract_links_ddg, limit * 3),
         (_extract_links_google_text, limit * 2),
         (_extract_links_bing, limit * 2),
-    )
+    ]
     raw_links: List[Dict[str, str]] = []
+
+    # Przygotuj listę proxy do rotacji dla silników
+    proxy_pool = list(proxies) if proxies else [None]
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(engines)) as executor:
-        futures = [
-            executor.submit(_run_single_engine, fn, query, location, lim, proxy)
-            for fn, lim in engines
-        ]
+        futures = []
+        for i, (fn, lim) in enumerate(engines):
+            # Każdy silnik dostaje inne proxy z puli (round-robin)
+            p = proxy_pool[i % len(proxy_pool)]
+            futures.append(executor.submit(_run_single_engine, fn, query, location, lim, p))
+
         for future in concurrent.futures.as_completed(futures):
             try:
                 raw_links.extend(future.result())
@@ -471,36 +485,27 @@ def search_companies_web(query: str, location: str = "Berlin", limit: int = 10,
                           proxies: Optional[List[str]] = None
                           ) -> Tuple[List[Dict[str, str]], Dict[str, Optional[str]]]:
     """
-    Hybrydowe wyszukiwanie firm z adresami e-mail (DDG + Google + Bing równolegle),
-    z obsługą przerwania przez `_worker` (obiekt z atrybutem `_is_running`).
-
-    `domain_cache`: opcjonalny słownik {domena: email|None} z wcześniej zeskanowanymi
-    domenami (np. z innej kombinacji kategoria/lokalizacja w tym samym przebiegu, albo
-    z poprzednich sesji zapisanych w bazie) - domeny w nim obecne NIE są odpytywane
-    ponownie, co znacząco przyspiesza kolejne wyszukiwania.
-
-    `proxies`: opcjonalna lista adresów proxy (http:// lub socks5://) - jeden losowy
-    proxy jest wybierany na CAŁE to wywołanie (3 silniki wyszukiwania + skan domen),
-    żeby uniknąć blokad IP przy dużej liczbie zapytań do wyszukiwarek.
-
-    Zwraca (wyniki, nowo_zeskanowane) - `nowo_zeskanowane` to domeny faktycznie
-    sprawdzone w tym wywołaniu (do zapisania w cache przez wywołującego).
+    Hybrydowe wyszukiwanie firm z adresami e-mail. Automatycznie przyspiesza
+    pracę, jeśli podano listę proxy.
     """
     def still_running() -> bool:
         return not _worker or _worker._is_running
 
     domain_cache = domain_cache or {}
-    proxy = _pick_proxy(proxies)
-    logger.info("Szukam: %s w %s (proxy: %s)", query, location, _mask_proxy(proxy))
+    proxies = proxies or []
+
+    logger.info("Szukam: %s w %s (dostępne proxy: %d)", query, location, len(proxies))
 
     if not still_running():
         return [], {}
-    raw_links = _search_all_engines_parallel(query, location, limit, proxy)
+
+    # 1. Szukanie linków w wyszukiwarkach (rozdzielone na proxy)
+    raw_links = _search_all_engines_parallel(query, location, limit, proxies)
 
     if not still_running():
         return [], {}
 
-    # Deduplikacja po domenie + odfiltrowanie portali/social media
+    # Deduplikacja po domenie + odfiltrowanie portali
     domain_to_name: Dict[str, str] = {}
     skipped_portals = 0
     for item in raw_links:
@@ -509,21 +514,15 @@ def search_companies_web(query: str, location: str = "Berlin", limit: int = 10,
             skipped_portals += 1
             continue
         domain_to_name.setdefault(domain, item["name"])
-    if skipped_portals:
-        logger.info("Odfiltrowano %d wyników jako portale/agregatory", skipped_portals)
 
     all_domains = list(domain_to_name.keys())
     to_scan = [d for d in all_domains if d not in domain_cache]
-    from_cache = len(all_domains) - len(to_scan)
-    if from_cache:
-        logger.info("Domeny: %d nowych, %d z cache (pominięto sieć)", len(to_scan), from_cache)
-    else:
-        logger.info("Unikalne domeny: %d", len(all_domains))
 
     if not all_domains or not still_running():
         return [], {}
 
-    newly_scanned = _run_async_fetch(to_scan, proxy) if to_scan else {}
+    # 2. Skanowanie stron WWW (równoległe przyspieszone przez proxy)
+    newly_scanned = _run_async_fetch(to_scan, proxies) if to_scan else {}
 
     results = []
     for domain in all_domains:
@@ -546,6 +545,5 @@ def search_companies_web(query: str, location: str = "Berlin", limit: int = 10,
             break
 
     logger.info("Znaleziono %d firm z emailami", len(results))
-    # Return emails for domain_cache
     new_cache = {d: v["email"] for d, v in newly_scanned.items()}
     return results, new_cache

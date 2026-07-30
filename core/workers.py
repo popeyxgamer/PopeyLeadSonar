@@ -324,6 +324,7 @@ class AutoPilotWorker(QThread):
         self.session_cap = session_cap
         self._stop = False
         self.excluded = db.get_excluded_emails()
+        self.proxies = kwargs.get("proxies") or []
         self.found = 0
         self.sent = 0
         self.errors = 0
@@ -336,11 +337,11 @@ class AutoPilotWorker(QThread):
             for l in self.locations:
                 if self._stop: break
                 self.status.emit(f"🔍 Szukaj: {q} w {l}")
-                results, _ = search_companies_web(q, l, self.limit, self)
+                results, _ = search_companies_web(q, l, self.limit, self, proxies=self.proxies)
                 for lead in results:
                     if self._stop or self.sent >= self.session_cap: break
                     email = lead.get('email')
-                    if email and email not in self.wyslane:
+                    if email and email not in self.excluded:
                         self.found += 1
                         ok, _, _ = wyslij_email(email, self.temat, self.szablon, self.user, self.pwd, self.host, self.port)
                         if ok: self.sent += 1; self.wyslane.add(email); db.mark_sent(email)

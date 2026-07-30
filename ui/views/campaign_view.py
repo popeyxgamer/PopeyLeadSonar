@@ -197,9 +197,15 @@ class CampaignView(BaseView):
         q, l = self._get_params()
         if not q or not l: return
 
+        settings = get_current_profile_settings()
+        proxies = []
+        if settings.get("proxy_enabled"):
+            raw = settings.get("proxy_list", "")
+            proxies = [p.strip() for p in raw.splitlines() if p.strip()]
+
         self._prep_ui()
         self.worker = SearchWorker(
-            q, l, self.limit_spin.value(), self.czas_spin.value(), [],
+            q, l, self.limit_spin.value(), self.czas_spin.value(), proxies,
             ai_scoring=self.ai_scoring_check.isChecked(),
             force_research=self.force_research_check.isChecked()
         )
@@ -218,6 +224,11 @@ class CampaignView(BaseView):
         if not user or not pwd:
             QMessageBox.warning(self, tr("Błąd"), tr("Skonfiguruj SMTP w Ustawieniach!")); return
 
+        proxies = []
+        if settings.get("proxy_enabled"):
+            raw = settings.get("proxy_list", "")
+            proxies = [p.strip() for p in raw.splitlines() if p.strip()]
+
         self._prep_ui()
 
         # Setup rotator if enabled
@@ -234,7 +245,8 @@ class CampaignView(BaseView):
             html=settings.get("html_enabled", False),
             verify_mx=settings.get("mx_verify_enabled", False),
             smime_sign=settings.get("smime_enabled", False),
-            rotator=rotator, use_account_rotation=(rotator is not None)
+            rotator=rotator, use_account_rotation=(rotator is not None),
+            proxies=proxies
         )
         self.worker.status.connect(self.status_label.setText)
         self.worker.counters.connect(lambda f, s, e: self.counters_label.setText(f"Znaleziono: {f} | Wysłano: {s} | Błędy: {e}"))
