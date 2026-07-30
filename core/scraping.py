@@ -23,7 +23,7 @@ from bs4 import BeautifulSoup
 from .config import (
     EMAIL_BLACKLIST, IGNORED_DOMAINS, MAX_ASYNC_CONCURRENT, MAX_HTML_SIZE,
     PORTAL_DOMAIN_KEYWORDS, PORTAL_TITLE_KEYWORDS, REQUEST_TIMEOUT,
-    ASYNC_GLOBAL_TIMEOUT, SEARCH_DELAY_RANGE, logger,
+    ASYNC_GLOBAL_TIMEOUT, SEARCH_DELAY_RANGE, RACING_THRESHOLD, SEARCH_CHUNK_SIZE, logger,
 )
 
 try:
@@ -315,35 +315,75 @@ async def _fetch_data_from_domain(client: httpx.AsyncClient, domain: str) -> Tup
     return domain, final_email, final_socials
 
 
+def _normalize_proxy(p: str) -> str:
+    """Upewnia się, że proxy ma poprawny schemat http://."""
+    p = p.strip()
+    if not p: return ""
+    if "://" not in p:
+        return "http://" + p
+    return p
+
+
 async def _fetch_all_data(domains: List[str], proxies: Optional[List[str]] = None) -> Dict[str, Dict]:
-    proxy_list = list(proxies) if proxies else []
+    proxy_list = [_normalize_proxy(p) for p in (proxies or []) if p.strip()]
 
     # Formuła Turbo: Moc = Baza * (Proxy + 1)
     max_concurrent = MAX_ASYNC_CONCURRENT * (len(proxy_list) + 1)
-    # Twardy sufit 150 połączeń, żeby nie przekroczyć limitów systemu operacyjnego
     max_concurrent = min(max_concurrent, 150)
 
     semaphore = asyncio.Semaphore(max_concurrent)
 
-    # Tworzymy pulę klientów - każdy ze swoim proxy (lub lokalnym IP)
-    # Dzięki temu mamy prawdziwą rotację adresów IP dla każdego zapytania
+    # Tworzymy pulę klientów
     clients = []
-    # 1. Dodaj klienta lokalnego (bez proxy)
+    # 1. Klient lokalny
     clients.append(httpx.AsyncClient(headers=_random_headers(), follow_redirects=True, timeout=REQUEST_TIMEOUT))
-
-    # 2. Dodaj klientów dla każdego proxy
+    # 2. Klienci proxy
     for p in proxy_list:
         try:
             clients.append(httpx.AsyncClient(proxy=p, headers=_random_headers(), follow_redirects=True, timeout=REQUEST_TIMEOUT))
         except Exception as e:
-            logger.warning("Błędny format proxy %s: %s", p, e)
+            logger.warning("Błędne proxy %s: %s", p, e)
 
     try:
+        async def fetch_with_racing(domain: str, worker_idx: int):
+            """Wyścig IP: jeśli proxy muli, odpalamy zapasowe połączenie."""
+            # Wybieramy głównego klienta dla tego zadania
+            main_client = clients[worker_idx % len(clients)]
+
+            # Zadanie główne
+            task1 = asyncio.create_task(_fetch_data_from_domain(main_client, domain))
+
+            # Czekamy na wynik lub próg RACING_THRESHOLD
+            done, pending = await asyncio.wait([task1], timeout=RACING_THRESHOLD)
+
+            if done:
+                res = task1.result()
+                if res[1]: # Jeśli znaleźliśmy e-mail, kończymy
+                    return res
+
+            # Jeśli task1 wciąż trwa (muli) lub nie znalazł maila, odpalamy zapas (lokalne IP lub inne proxy)
+            # logger.debug("[RACING] Wyścig dla %s...", domain)
+            backup_client = clients[random.randint(0, len(clients)-1)]
+            task2 = asyncio.create_task(_fetch_data_from_domain(backup_client, domain))
+
+            # Kto pierwszy ten lepszy
+            done, pending = await asyncio.wait([task1, task2], return_when=asyncio.FIRST_COMPLETED)
+
+            for t in done:
+                try:
+                    result = t.result()
+                    # Anulujemy drugi task
+                    for p in pending: p.cancel()
+                    return result
+                except Exception:
+                    continue
+
+            # Fallback jeśli oba zawiodły
+            return domain, None, {}
+
         async def sem_worker(domain: str, worker_idx: int):
             async with semaphore:
-                # Wybierz klienta z puli (rotacja Round-Robin)
-                client = clients[worker_idx % len(clients)]
-                return await _fetch_data_from_domain(client, domain)
+                return await fetch_with_racing(domain, worker_idx)
 
         tasks = [asyncio.create_task(sem_worker(domain, i)) for i, domain in enumerate(domains)]
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -354,12 +394,8 @@ async def _fetch_all_data(domains: List[str], proxies: Optional[List[str]] = Non
                 valid_results[res[0]] = {"email": res[1], "socials": res[2]}
         return valid_results
     finally:
-        # Zamykamy wszystkich klientów
         for c in clients:
-            try:
-                await c.aclose()
-            except Exception:
-                pass
+            await c.aclose()
 
 
 def _run_async_fetch(domains: List[str], proxies: Optional[List[str]] = None) -> Dict[str, Dict]:
@@ -411,10 +447,10 @@ def _extract_links_ddg(query: str, location: str, limit: int,
 
 
 def _extract_links_google_text(query: str, location: str, limit: int,
-                                proxy: Optional[str] = None) -> List[Dict[str, str]]:
+                                proxy: Optional[str] = None, start: int = 0) -> List[Dict[str, str]]:
     collected = []
     try:
-        search_url = f"https://www.google.de/search?q={quote_plus(query)}+{quote_plus(location)}&num={limit}"
+        search_url = f"https://www.google.de/search?q={quote_plus(query)}+{quote_plus(location)}&num={limit}&start={start}"
         proxies_dict = {"http": proxy, "https": proxy} if proxy else None
         resp = requests.get(search_url, headers=_random_headers(), timeout=REQUEST_TIMEOUT,
                              proxies=proxies_dict)
@@ -469,26 +505,29 @@ def _run_single_engine(engine_fn, query: str, location: str, limit: int,
 def _search_all_engines_parallel(query: str, location: str, limit: int,
                                   proxies: Optional[List[str]] = None) -> List[Dict[str, str]]:
     """
-    Odpytuje DuckDuckGo, Google i Bing RÓWNOLEGLE, rozdzielając zapytania
-    na dostępne adresy proxy (jeśli są podane).
+    Odpytuje DuckDuckGo, Google i Bing RÓWNOLEGLE, rozbijając zapytania
+    na mniejsze paczki i rozdzielając je na proxy.
     """
-    engines = [
-        (_extract_links_ddg, limit * 3),
-        (_extract_links_google_text, limit * 2),
-        (_extract_links_bing, limit * 2),
-    ]
+    proxy_pool = [_normalize_proxy(p) for p in (proxies or []) if p.strip()] or [None]
     raw_links: List[Dict[str, str]] = []
 
-    # Przygotuj listę proxy do rotacji dla silników
-    proxy_pool = list(proxies) if proxies else [None]
+    # Przygotuj paczki (chunks)
+    # Zamiast 1 x 30 wyników, zróbmy 3 x 10 wyników dla Google/Bing
+    tasks = []
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(engines)) as executor:
-        futures = []
-        for i, (fn, lim) in enumerate(engines):
-            # Każdy silnik dostaje inne proxy z puli (round-robin)
-            p = proxy_pool[i % len(proxy_pool)]
-            futures.append(executor.submit(_run_single_engine, fn, query, location, lim, p))
+    # 1. DuckDuckGo (jeden strzał, bo biblioteka sama dba o limity)
+    tasks.append((_extract_links_ddg, query, location, limit * 2, proxy_pool[0]))
 
+    # 2. Google i Bing w kawałkach
+    num_chunks = 2 if limit <= 15 else 3
+    for i in range(num_chunks):
+        offset = i * SEARCH_CHUNK_SIZE
+        p_idx = (i + 1) % len(proxy_pool)
+        tasks.append((_extract_links_google_text, query, location, SEARCH_CHUNK_SIZE, proxy_pool[p_idx], offset))
+        tasks.append((_extract_links_bing, query, location, SEARCH_CHUNK_SIZE, proxy_pool[(p_idx + 1) % len(proxy_pool)]))
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(tasks)) as executor:
+        futures = [executor.submit(t[0], *t[1:]) for t in tasks]
         for future in concurrent.futures.as_completed(futures):
             try:
                 raw_links.extend(future.result())

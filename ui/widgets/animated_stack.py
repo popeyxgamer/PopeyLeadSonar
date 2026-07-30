@@ -19,10 +19,16 @@ class AnimatedStackedWidget(QStackedWidget):
         if index == self.currentIndex() or index < 0 or index >= self.count():
             return
 
+        # Ostateczne wyczyszczenie poprzedniego stanu
         if self._is_animating:
             if self._anim_group:
-                self._anim_group.stop()
-            self._finalize_transition()
+                try:
+                    self._anim_group.stop()
+                    self._anim_group.deleteLater()
+                except Exception:
+                    pass
+            self._is_animating = False
+            self._anim_group = None
 
         self._next_index = index
         self._current_index = self.currentIndex()
@@ -48,7 +54,7 @@ class AnimatedStackedWidget(QStackedWidget):
         next_w.show()
         next_w.raise_()
 
-        # Tworzymy nową grupę animacji dla każdego przejścia (bezpieczniejsze dla Qt)
+        # Tworzymy całkowicie nową grupę dla tego konkretnego przejścia
         self._anim_group = QParallelAnimationGroup(self)
 
         anim_next = QPropertyAnimation(next_w, b"pos", self._anim_group)
@@ -85,7 +91,7 @@ class AnimatedStackedWidget(QStackedWidget):
             prev_w.hide()
             prev_w.move(0, 0)
 
-        # Sprzątamy grupę
+        # Usuwamy grupę z pamięci (Qt zajmie się resztą)
         if self._anim_group:
             self._anim_group.deleteLater()
             self._anim_group = None
