@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PopeyLeadSonar - AI Lead Generation & Automation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .gradient-bg { background: linear-gradient(135deg, #1e1e2e 0%, #313244 100%); }
+        .feature-card { background: #313244; border: 1px solid #45475a; transition: transform 0.2s; }
+        .feature-card:hover { transform: translateY(-5px); border-color: #89b4fa; }
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-[#1e1e2e] text-[#cdd6f4]" x-data="{ lang: 'pl' }">
+
+    <!-- NAVIGATION -->
+    <nav class="sticky top-0 z-50 bg-[#1e1e2e]/80 backdrop-blur-md border-b border-[#45475a] py-4">
+        <div class="container mx-auto px-6 flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <span class="text-2xl font-extrabold text-[#89b4fa]">🎯 PopeyLeadSonar</span>
+            </div>
+            <div class="flex items-center gap-6">
+                <div class="flex gap-2">
+                    <button @click="lang = 'pl'" :class="lang === 'pl' ? 'opacity-100' : 'opacity-40'" class="transition">🇵🇱</button>
+                    <button @click="lang = 'en'" :class="lang === 'en' ? 'opacity-100' : 'opacity-40'" class="transition">🇬🇧</button>
+                    <button @click="lang = 'de'" :class="lang === 'de' ? 'opacity-100' : 'opacity-40'" class="transition">🇩🇪</button>
+                </div>
+                <a href="https://github.com/popeyxgamer/PopeyLeadSonar" class="hidden md:block hover:text-[#89b4fa]">GitHub</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- HERO SECTION -->
+    <section class="py-20 gradient-bg">
+        <div class="container mx-auto px-6 text-center">
+            <h1 class="text-5xl md:text-7xl font-extrabold mb-6 tracking-tight">
+                <span x-show="lang === 'pl'">Zautomatyzuj Swoją Sprzedaż</span>
+                <span x-show="lang === 'en'">Automate Your Sales</span>
+                <span x-show="lang === 'de'">Automatisieren Sie Ihren Vertrieb</span>
+            </h1>
+            <p class="text-xl text-[#a6adc8] max-w-3xl mx-auto mb-10">
+                <span x-show="lang === 'pl'">Inteligentne generowanie leadów i wysyłka maili przy użyciu AI. Znajdź klientów, spersonalizuj ofertę i rozgrzej skrzynki w jednym programie.</span>
+                <span x-show="lang === 'en'">Intelligent lead generation and email automation powered by AI. Find clients, personalize offers, and warm up inboxes in one single app.</span>
+                <span x-show="lang === 'de'">Intelligente Lead-Generierung und E-Mail-Automatisierung mit KI. Finden Sie Kunden, personalisieren Sie Angebote und wärmen Sie Postfächer auf.</span>
+            </p>
+            <div class="flex flex-col md:flex-row gap-4 justify-center">
+                <a href="https://github.com/popeyxgamer/PopeyLeadSonar/raw/main/release/PopeyLeadSonar.exe"
+                   class="bg-[#89b4fa] text-[#1e1e2e] px-10 py-4 rounded-xl font-bold text-lg hover:bg-[#74a0f8] transition flex items-center justify-center gap-2">
+                   <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                   <span x-show="lang === 'pl'">POBIERZ .EXE (Windows)</span>
+                   <span x-show="lang === 'en'">DOWNLOAD .EXE (Windows)</span>
+                   <span x-show="lang === 'de'">DOWNLOAD .EXE (Windows)</span>
+                </a>
+                <a href="https://tipply.pl/@Papajgejmer" target="_blank"
+                   class="border-2 border-[#cba6f7] text-[#cba6f7] px-10 py-4 rounded-xl font-bold text-lg hover:bg-[#cba6f7]/10 transition">
+                   <span x-show="lang === 'pl'">WESPRZYJ PROJEKT ☕</span>
+                   <span x-show="lang === 'en'">SUPPORT PROJECT ☕</span>
+                   <span x-show="lang === 'de'">PROJEKT UNTERSTÜTZEN ☕</span>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- FEATURES -->
+    <section class="py-20 container mx-auto px-6">
+        <div class="grid md:grid-cols-3 gap-8">
+            <div class="feature-card p-8 rounded-2xl">
+                <div class="w-12 h-12 bg-[#89b4fa]/20 text-[#89b4fa] rounded-lg flex items-center justify-center mb-6">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+                <h3 class="text-2xl font-bold mb-4">
+                    <span x-show="lang === 'pl'">Hybrydowe Wyszukiwanie</span>
+                    <span x-show="lang === 'en'">Hybrid Search</span>
+                    <span x-show="lang === 'de'">Hybride Suche</span>
+                </h3>
+                <p class="text-[#a6adc8]">
+                    <span x-show="lang === 'pl'">Łączy wyniki z Google, Bing i DuckDuckGo, aby znaleźć firmy z e-mailami w kilka sekund.</span>
+                    <span x-show="lang === 'en'">Combines results from Google, Bing, and DuckDuckGo to find companies with emails in seconds.</span>
+                    <span x-show="lang === 'de'">Kombiniert Ergebnisse von Google, Bing und DuckDuckGo, um Firmen mit E-Mails in Sekunden zu finden.</span>
+                </p>
+            </div>
+            <div class="feature-card p-8 rounded-2xl">
+                <div class="w-12 h-12 bg-[#cba6f7]/20 text-[#cba6f7] rounded-lg flex items-center justify-center mb-6">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                </div>
+                <h3 class="text-2xl font-bold mb-4">
+                    <span x-show="lang === 'pl'">Potęga AI</span>
+                    <span x-show="lang === 'en'">AI Power</span>
+                    <span x-show="lang === 'de'">KI-Power</span>
+                </h3>
+                <p class="text-[#a6adc8]">
+                    <span x-show="lang === 'pl'">AI analizuje stronę firmy i pisze spersonalizowane wiadomości, które nie brzmią jak spam.</span>
+                    <span x-show="lang === 'en'">AI analyzes company websites and writes personalized messages that don't sound like spam.</span>
+                    <span x-show="lang === 'de'">KI analysiert Firmen-Websites und schreibt personalisierte Nachrichten, die nicht nach Spam klingen.</span>
+                </p>
+            </div>
+            <div class="feature-card p-8 rounded-2xl">
+                <div class="w-12 h-12 bg-[#a6e3a1]/20 text-[#a6e3a1] rounded-lg flex items-center justify-center mb-6">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.040L3 14.535a11.955 11.955 0 001.382 6.166l1.242-1.242a11.955 11.955 0 018.618-3.040 11.955 11.955 0 018.618 3.040l1.242 1.242a11.955 11.955 0 001.382-6.166l-1.382-8.509z"></path></svg>
+                </div>
+                <h3 class="text-2xl font-bold mb-4">
+                    <span x-show="lang === 'pl'">Bezpieczeństwo MX</span>
+                    <span x-show="lang === 'en'">MX Reputation</span>
+                    <span x-show="lang === 'de'">MX Reputation</span>
+                </h3>
+                <p class="text-[#a6adc8]">
+                    <span x-show="lang === 'pl'">Automatyczna weryfikacja MX i podpisy S/MIME chronią Twoją skrzynkę przed zablokowaniem.</span>
+                    <span x-show="lang === 'en'">Automatic MX verification and S/MIME signatures protect your inbox from being blocked.</span>
+                    <span x-show="lang === 'de'">Automatische MX-Verifizierung und S/MIME-Signaturen schützen Ihr Postfach vor Sperrungen.</span>
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- GUIDE -->
+    <section class="py-20 bg-[#181825]">
+        <div class="container mx-auto px-6">
+            <h2 class="text-4xl font-bold mb-16 text-center">
+                <span x-show="lang === 'pl'">Jak zacząć w 3 krokach</span>
+                <span x-show="lang === 'en'">How to start in 3 steps</span>
+                <span x-show="lang === 'de'">Erste Schritte w 3 Schritten</span>
+            </h2>
+
+            <div class="space-y-24">
+                <!-- STEP 1 -->
+                <div class="flex flex-col md:flex-row items-center gap-12">
+                    <div class="md:w-1/2">
+                        <div class="text-[#89b4fa] font-extrabold text-6xl mb-4">01</div>
+                        <h3 class="text-3xl font-bold mb-6">
+                            <span x-show="lang === 'pl'">Pobierz i Uruchom</span>
+                            <span x-show="lang === 'en'">Download & Run</span>
+                            <span x-show="lang === 'de'">Herunterladen & Starten</span>
+                        </h3>
+                        <p class="text-[#a6adc8] text-lg leading-relaxed">
+                            <span x-show="lang === 'pl'">Pobierz plik .exe i uruchom go. Jeśli Windows pokaże ostrzeżenie, kliknij <strong>"Więcej informacji"</strong> -> <strong>"Uruchom mimo to"</strong>. Program jest bezpieczny i Open Source.</span>
+                            <span x-show="lang === 'en'">Download the .exe file and run it. If Windows shows a warning, click <strong>"More info"</strong> -> <strong>"Run anyway"</strong>. The app is safe and Open Source.</span>
+                            <span x-show="lang === 'de'">Laden Sie die .exe-Datei herunter und starten Sie sie. Wenn Windows eine Warnung anzeigt, klicken Sie auf <strong>"Weitere Informationen"</strong> -> <strong>"Trotzdem ausführen"</strong>. Die App ist sicher und Open Source.</span>
+                        </p>
+                    </div>
+                    <div class="md:w-1/2 bg-[#313244] p-4 rounded-3xl border border-[#45475a] shadow-2xl">
+                        <div class="h-64 bg-[#1e1e2e] rounded-2xl flex items-center justify-center italic text-[#585b70]">
+                             <span x-show="lang === 'pl'">[Zdjęcie Splash Screena]</span>
+                             <span x-show="lang === 'en'">[Splash Screen Image]</span>
+                             <span x-show="lang === 'de'">[Splash-Bildschirm]</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 2 -->
+                <div class="flex flex-col md:flex-row-reverse items-center gap-12">
+                    <div class="md:w-1/2">
+                        <div class="text-[#cba6f7] font-extrabold text-6xl mb-4">02</div>
+                        <h3 class="text-3xl font-bold mb-6">
+                            <span x-show="lang === 'pl'">Dodaj Konto (Hasło Aplikacji)</span>
+                            <span x-show="lang === 'en'">Add Account (App Password)</span>
+                            <span x-show="lang === 'de'">Konto hinzufügen (App-Passwort)</span>
+                        </h3>
+                        <p class="text-[#a6adc8] text-lg leading-relaxed">
+                            <span x-show="lang === 'pl'">Wejdź w <strong>Ustawienia -> Zaawansowane</strong>. Dodaj swoje konto Gmail lub inny serwer SMTP. Pamiętaj, aby dla Gmaila użyć <strong>Hasła Aplikacji</strong> zamiast głównego hasła.</span>
+                            <span x-show="lang === 'en'">Go to <strong>Settings -> Advanced</strong>. Add your Gmail account or any other SMTP server. Remember to use an <strong>App Password</strong> for Gmail, not your main password.</span>
+                            <span x-show="lang === 'de'">Gehen Sie zu <strong>Einstellungen -> Erweitert</strong>. Fügen Sie Ihr Gmail-Konto oder einen anderen SMTP-Server hinzu. Denken Sie daran, für Gmail ein <strong>App-Passwort</strong> zu verwenden, nicht Ihr Hauptpasswort.</span>
+                        </p>
+                    </div>
+                    <div class="md:w-1/2 bg-[#313244] p-4 rounded-3xl border border-[#45475a] shadow-2xl">
+                        <div class="h-64 bg-[#1e1e2e] rounded-2xl flex items-center justify-center italic text-[#585b70]">
+                             <span x-show="lang === 'pl'">[Zdjęcie Panelu Kont]</span>
+                             <span x-show="lang === 'en'">[Account Panel Image]</span>
+                             <span x-show="lang === 'de'">[Konten-Panel-Bild]</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 3 -->
+                <div class="flex flex-col md:flex-row items-center gap-12">
+                    <div class="md:w-1/2">
+                        <div class="text-[#a6e3a1] font-extrabold text-6xl mb-4">03</div>
+                        <h3 class="text-3xl font-bold mb-6">
+                            <span x-show="lang === 'pl'">Szukaj i Wysyłaj!</span>
+                            <span x-show="lang === 'en'">Search & Send!</span>
+                            <span x-show="lang === 'de'">Suchen & Senden!</span>
+                        </h3>
+                        <p class="text-[#a6adc8] text-lg leading-relaxed">
+                            <span x-show="lang === 'pl'">Wpisz frazę szukania, np. "Architekci" i miasto "Monachium". Kliknij <strong>Start</strong>. Po znalezieniu leadów, przejdź do zakładki <strong>Wysyłka</strong> i uruchom swoją pierwszą inteligentną kampanię.</span>
+                            <span x-show="lang === 'en'">Enter a search phrase like "Architects" and a city like "Munich". Click <strong>Start</strong>. Once leads are found, go to the <strong>Sending</strong> tab and launch your first smart campaign.</span>
+                            <span x-show="lang === 'de'">Geben Sie einen Suchbegriff wie „Architekten“ und eine Stadt wie „München“ ein. Klicken Sie auf <strong>Start</strong>. Wenn Leads gefunden wurden, gehen Sie zum Tab <strong>Versand</strong> und starten Sie Ihre erste intelligente Kampagne.</span>
+                        </p>
+                    </div>
+                    <div class="md:w-1/2 bg-[#313244] p-4 rounded-3xl border border-[#45475a] shadow-2xl">
+                        <div class="h-64 bg-[#1e1e2e] rounded-2xl flex items-center justify-center italic text-[#585b70]">
+                             <span x-show="lang === 'pl'">[Zdjęcie Dashboardu]</span>
+                             <span x-show="lang === 'en'">[Dashboard Image]</span>
+                             <span x-show="lang === 'de'">[Dashboard-Bild]</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- DONATE & DISCLAIMER -->
+    <section class="py-20 border-t border-[#45475a]">
+        <div class="container mx-auto px-6 text-center">
+            <h2 class="text-3xl font-bold mb-8">
+                <span x-show="lang === 'pl'">Twoje wsparcie ma znaczenie 💚</span>
+                <span x-show="lang === 'en'">Your support matters 💚</span>
+                <span x-show="lang === 'de'">Ihre Unterstützung zählt 💚</span>
+            </h2>
+            <p class="mb-10 text-[#a6adc8]">
+                <span x-show="lang === 'pl'">PopeyLeadSonar to projekt darmowy. Każda wpłata pomaga mi rozwijać nowe funkcje AI i utrzymywać kod w czystości.</span>
+                <span x-show="lang === 'en'">PopeyLeadSonar is a free project. Every donation helps me develop new AI features and keep the code clean.</span>
+                <span x-show="lang === 'de'">PopeyLeadSonar ist ein kostenloses Projekt. Jede Spende hilft mir, neue KI-Funktionen zu entwickeln und den Code sauber zu halten.</span>
+            </p>
+            <a href="https://tipply.pl/@Papajgejmer" class="inline-block bg-[#a6e3a1] text-[#1e1e2e] px-12 py-5 rounded-2xl font-black text-xl hover:scale-105 transition shadow-lg shadow-[#a6e3a1]/20">
+                 TIPPLY - DONATE
+            </a>
+
+            <div class="mt-20 p-8 bg-[#181825] rounded-3xl border border-[#f38ba8]/30 max-w-4xl mx-auto">
+                <h4 class="text-[#f38ba8] font-bold mb-4">DISCLAIMER / LEGAL</h4>
+                <p class="text-sm text-[#585b70]">
+                    <span x-show="lang === 'pl'">Autor nie ponosi odpowiedzialności za sposób wykorzystania tego narzędzia. Użytkownik jest zobowiązany do przestrzegania lokalnych przepisów (np. RODO, ustawa o świadczeniu usług drogą elektroniczną). Używaj programu w sposób etyczny i legalny.</span>
+                    <span x-show="lang === 'en'">The author takes no responsibility for how this tool is used. The user is responsible for complying with local regulations (e.g. GDPR, anti-spam laws). Use the program in an ethical and legal way.</span>
+                    <span x-show="lang === 'de'">Der Autor übernimmt keine Verantwortung für die Art und Weise, wie dieses Tool verwendet wird. Der Benutzer ist für die Einhaltung lokaler Vorschriften (z. B. DSGVO, Anti-Spam-Gesetze) verantwortlich. Verwenden Sie das Programm auf ethische und legale Weise.</span>
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="py-12 bg-[#11111b] text-center border-t border-[#45475a]">
+        <div class="container mx-auto px-6">
+            <div class="mb-4 font-bold text-[#89b4fa]">PopeyLeadSonar v2.0</div>
+            <div class="text-[#585b70] mb-6">
+                Created with ❤️ by <strong>popeyxgamer</strong>
+            </div>
+            <div class="flex justify-center gap-6 text-[#a6adc8]">
+                <span>Email: <a href="mailto:obserwujnewsymordo@gmail.com" class="hover:text-white underline">obserwujnewsymordo@gmail.com</a></span>
+                <a href="https://github.com/popeyxgamer/PopeyLeadSonar" class="hover:text-white">GitHub</a>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>
