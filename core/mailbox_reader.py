@@ -17,6 +17,7 @@ w tle) - ten moduł NIE go zastępuje, służy tylko do ręcznego podglądu/obs�
 """
 import imaplib
 import re
+import socket
 from dataclasses import dataclass, field
 from email import message_from_bytes
 from email.header import decode_header
