@@ -254,7 +254,7 @@ Ocena:"""
         
         try:
             return int(result.strip())
-        except:
+        except Exception:
             return None
 
 

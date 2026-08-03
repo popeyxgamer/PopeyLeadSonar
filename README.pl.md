@@ -6,6 +6,16 @@ Profesjonalna platforma Sales Engagement do generowania leadów przy pomocy AI i
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-3110/)
 [![PySide6](https://img.shields.io/badge/UI-PySide6-green.svg)](https://pypi.org/project/PySide6/)
 
+---
+
+### 🚀 **Szybki start (Wersja .EXE dla Windows)**
+
+Nie chcesz instalować Pythona? Pobierz gotową wersję:
+1. **Pobierz**: [PopeyLeadSonar.exe](release/PopeyLeadSonar.exe)
+2. **Instrukcja**: [Instrukcja (PL)](release/INSTRUCTIONS_PL.md) | [User Guide (EN)](release/INSTRUCTIONS_EN.md) | [Handbuch (DE)](release/INSTRUCTIONS_DE.md)
+
+---
+
 🌍 **Inne wersje językowe:** [English](README.md) · [Deutsch](README.de.md)
 
 PopeyLeadSonar zamienia tradycyjny proces cold mailingu w inteligentny, zautomatyzowany proces. Aplikacja zajmuje się wszystkim — od wyszukiwania firm w internecie, po zarządzanie złożonymi sekwencjami follow-up z personalizacją opartą o AI.

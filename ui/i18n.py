@@ -4,6 +4,7 @@ Prosty system wielojęzyczności (PL / EN / DE) dla interfejsu użytkownika.
 Wczytuje tłumaczenia z plików JSON w katalogu locales/.
 """
 import json
+import sys
 from pathlib import Path
 from typing import Optional, Dict
 from core.config import BASE_DIR
@@ -12,8 +13,14 @@ SUPPORTED_LANGUAGES = ["pl", "en", "de"]
 LANGUAGE_NAMES = {"pl": "Polski", "en": "English", "de": "Deutsch"}
 LANGUAGE_FLAGS = {"pl": "🇵🇱", "en": "🇬🇧", "de": "🇩🇪"}
 
+def get_resource_path(relative_path):
+    """Pobiera ścieżkę do zasobów (działa dla .py i .exe)"""
+    if hasattr(sys, '_MEIPASS'):
+        return Path(sys._MEIPASS) / relative_path
+    return BASE_DIR / relative_path
+
 _LANG_FILE = BASE_DIR / "app_language.txt"
-_LOCALES_DIR = BASE_DIR / "locales"
+_LOCALES_DIR = get_resource_path("locales")
 _current_language = "pl"
 _translations_cache: Dict[str, str] = {}
 
@@ -63,9 +70,10 @@ def load_language_from_disk() -> str:
     return _current_language
 
 def restart_app() -> None:
-    """Restartuje cały proces aplikacji, żeby nowy język był widoczny od razu."""
+    """Bezpiecznie restartuje aplikację, działając poprawnie również w wersji EXE."""
     import os
     import sys
+    import subprocess
 
     try:
         from PySide6.QtWidgets import QApplication
@@ -75,8 +83,16 @@ def restart_app() -> None:
     except Exception:
         pass
 
-    python = sys.executable
-    os.execv(python, [python] + sys.argv)
+    # Pobieramy ścieżkę do wykonywalnego pliku (skryptu lub EXE)
+    executable = sys.executable
+    args = sys.argv[:]
+
+    # Jeśli działamy jako EXE, sys.executable to ścieżka do naszego pliku .exe
+    # Używamy Popen, aby odseparować procesy i uniknąć błędów z folderem _MEIPASS
+    subprocess.Popen([executable] + args)
+
+    # Kończymy bieżący proces
+    os._exit(0)
 
 def tr(text: str) -> str:
     """Tłumaczy dany tekst na aktualny język lub zwraca oryginał."""

@@ -17,19 +17,26 @@ from PySide6.QtCore import Qt
 BASE_DIR = Path(__file__).resolve().parent
 os.chdir(BASE_DIR)
 
-ASSETS_DIR = BASE_DIR / "assets"
+def get_resource_path(relative_path):
+    """Pobiera ścieżkę do zasobów (działa dla .py i .exe)"""
+    if hasattr(sys, '_MEIPASS'):
+        return Path(sys._MEIPASS) / relative_path
+    return Path(relative_path)
+
+ASSETS_DIR = get_resource_path("assets")
 ICON_PATH = ASSETS_DIR / "icon.ico"
 SPLASH_PATH = ASSETS_DIR / "splash.png"
 
 from core.database import init_db_for_profile
 from core.profile_manager import switch_profile, get_all_profiles
-from core.config import logger, get_active_profile, DEFAULT_PROFILE_NAME, PROFILES_DIR
+from core.config import logger, get_active_profile, DEFAULT_PROFILE_NAME, PROFILES_DIR, APP_DATA_DIR
 from ui.i18n import load_language_from_disk
 from ui.main_window import MainWindow
 
 
 def main() -> int:
-    # Utwórz folder profili
+    # Utwórz folder danych i profili
+    APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
     PROFILES_DIR.mkdir(exist_ok=True)
 
     # Sprawdź, czy istnieje profil "default" – jeśli nie, utwórz
@@ -40,7 +47,7 @@ def main() -> int:
     # Przełącz na ostatni profil (lub default)
     last_profile = None
     try:
-        with open(BASE_DIR / "last_profile.txt", "r", encoding="utf-8") as f:
+        with open(APP_DATA_DIR / "last_profile.txt", "r", encoding="utf-8") as f:
             last_profile = f.read().strip()
     except (OSError, FileNotFoundError):
         pass

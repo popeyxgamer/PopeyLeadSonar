@@ -16,8 +16,9 @@ from core.config import (
     SMTP_RELAY_HOST, SMTP_RELAY_PORT, SMTP_FALLBACK_HOST, SMTP_FALLBACK_PORT,
     CUSTOM_SEND_DELAY_DEFAULT, CUSTOM_SEND_DELAY_MIN, CUSTOM_SESSION_CAP_DEFAULT,
     CUSTOM_SESSION_CAP_MAX, GMAIL_FREE_SESSION_CAP_DEFAULT, GMAIL_FREE_SESSION_CAP_OPTIONS,
-    SESSION_CAP_OPTIONS, SESSION_HARD_CAP, get_send_delay, guess_smtp
+    SESSION_CAP_OPTIONS, SESSION_HARD_CAP, get_send_delay, guess_smtp, VERSION
 )
+from core.updater import check_for_updates
 from core.signal_bus import bus
 from core import database as db
 from core.bounce_imap import BounceMonitor
@@ -46,6 +47,11 @@ class SettingsView(BaseView):
         self.bl_tab = QWidget()
         self._setup_bl_tab()
         self.tabs.addTab(self.bl_tab, tr("🚫 Blacklist"))
+
+        # 4. Aktualizacje
+        self.update_tab = QWidget()
+        self._setup_update_tab()
+        self.tabs.addTab(self.update_tab, tr("🚀 Aktualizacje"))
 
         # Save & Test row
         btn_row = QHBoxLayout()
@@ -230,6 +236,33 @@ class SettingsView(BaseView):
         form.addStretch()
         scroll.setWidget(content)
         lay.addWidget(scroll)
+
+    def _setup_update_tab(self):
+        lay = QVBoxLayout(self.update_tab)
+
+        group = QGroupBox(tr("Informacje o wersji"))
+        form = QFormLayout(group)
+
+        ver_label = QLabel(f"<b>{VERSION}</b>")
+        ver_label.setStyleSheet("font-size: 16px; color: #4a9eff;")
+        form.addRow(tr("Aktualna wersja:"), ver_label)
+
+        status_label = QLabel(tr("Aplikacja jest aktualna."))
+        status_label.setStyleSheet("color: #888;")
+        form.addRow(tr("Status:"), status_label)
+
+        lay.addWidget(group)
+
+        self.btn_check_update = QPushButton(tr("🔄 Sprawdź dostępność aktualizacji"))
+        self.btn_check_update.setStyleSheet("padding: 10px; font-weight: bold;")
+        self.btn_check_update.clicked.connect(lambda: check_for_updates(self, silent=False))
+        lay.addWidget(self.btn_check_update)
+
+        hint = QLabel(tr("ℹ️ Program automatycznie sprawdza aktualizacje przy każdym uruchomieniu."))
+        hint.setStyleSheet("color: #888; font-size: 11px; margin-top: 10px;")
+        lay.addWidget(hint)
+
+        lay.addStretch()
 
     def _setup_bl_tab(self):
         lay = QVBoxLayout(self.bl_tab)

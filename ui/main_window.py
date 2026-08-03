@@ -31,17 +31,23 @@ from ui.views.ai_lab_view import AILabView
 from ui.views.settings_view import SettingsView
 from ui.styles import DARK_STYLESHEET, DEFAULT_PROFILE_NAME, COLOR_BG, COLOR_BORDER, COLOR_ACCENT, COLOR_ERROR, COLOR_SECONDARY
 from ui.i18n import tr
-from core.config import logger
+from core.config import logger, VERSION
+from core.updater import check_for_updates
 from core.workers import SequenceWorker
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('PopeyLeadSonar v2.0')
+        self.setWindowTitle(f'PopeyLeadSonar v{VERSION}')
         self.setWindowState(Qt.WindowMaximized)
         self.setStyleSheet(DARK_STYLESHEET)
 
         self.seq_worker = None
+
+        # ... (rest of the init code)
+
+        # Sprawdzanie aktualizacji w tle (5 sekund po starcie)
+        QTimer.singleShot(5000, lambda: check_for_updates(self, silent=True))
 
         # 1. Główny układ
         self.central_widget = QWidget()

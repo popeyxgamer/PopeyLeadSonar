@@ -5,6 +5,7 @@ Każdy profil ma własny folder z bazą, logami i ustawieniami.
 """
 import json
 import logging
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -14,15 +15,57 @@ from datetime import datetime
 from cryptography.hazmat.primitives import hashes
 
 # ------------------------------------------------------------------
-# Ścieżki GŁÓWNE (niezależne od profilu)
+# Wersja i dystrybucja
+# ------------------------------------------------------------------
+VERSION = "2.0.1"
+GITHUB_USER = "popeyxgamer"
+GITHUB_REPO = "PopeyLeadSonar"
+
+# ------------------------------------------------------------------
+# Ścieżki GŁÓWNE
 # ------------------------------------------------------------------
 if getattr(sys, "frozen", False):
+    # Aplikacja skompilowana (EXE)
     BASE_DIR = Path(sys.executable).resolve().parent
+    # Dane użytkownika w %LOCALAPPDATA% (idiotoodporne aktualizacje)
+    APP_DATA_DIR = Path(os.environ.get("LOCALAPPDATA", str(BASE_DIR))) / "PopeyLeadSonar"
 else:
+    # Uruchomienie ze źródła (Python)
     BASE_DIR = Path(__file__).resolve().parent.parent
+    APP_DATA_DIR = BASE_DIR
 
-PROFILES_DIR = BASE_DIR / "profiles"
-PROFILES_INDEX_FILE = BASE_DIR / "profiles_index.json"
+PROFILES_DIR = APP_DATA_DIR / "profiles"
+PROFILES_INDEX_FILE = APP_DATA_DIR / "profiles_index.json"
+
+
+def migrate_data_if_needed():
+    """Przenosi dane ze starej lokalizacji (obok EXE) do %LOCALAPPDATA%."""
+    if not getattr(sys, "frozen", False):
+        return
+
+    old_profiles = BASE_DIR / "profiles"
+    old_index = BASE_DIR / "profiles_index.json"
+    old_last_profile = BASE_DIR / "last_profile.txt"
+
+    if old_profiles.exists() and not PROFILES_DIR.exists():
+        try:
+            APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+            # Kopiujemy folder profili
+            shutil.copytree(old_profiles, PROFILES_DIR, dirs_exist_ok=True)
+            # Kopiujemy indeks
+            if old_index.exists():
+                shutil.copy2(old_index, PROFILES_INDEX_FILE)
+            # Kopiujemy informację o ostatnim profilu
+            if old_last_profile.exists():
+                shutil.copy2(old_last_profile, APP_DATA_DIR / "last_profile.txt")
+
+            print(f"Dane zostały zmigrowane do: {APP_DATA_DIR}")
+        except Exception as e:
+            print(f"Błąd migracji danych: {e}")
+
+
+# Uruchom migrację przy imporcie modułu
+migrate_data_if_needed()
 
 # Domyślna nazwa profilu (pierwsze uruchomienie / fallback)
 DEFAULT_PROFILE_NAME = "default"
@@ -41,7 +84,7 @@ def set_active_profile(name: str) -> None:
     _active_profile = name
     # Zapisz ostatni użyty profil do pliku (żeby przy restarcie wczytać)
     try:
-        with open(BASE_DIR / "last_profile.txt", "w", encoding="utf-8") as f:
+        with open(APP_DATA_DIR / "last_profile.txt", "w", encoding="utf-8") as f:
             f.write(name)
     except OSError:
         pass
@@ -55,7 +98,7 @@ def get_active_profile() -> Optional[str]:
 def load_last_profile() -> Optional[str]:
     """Wczytuje ostatnio używany profil z pliku."""
     try:
-        with open(BASE_DIR / "last_profile.txt", "r", encoding="utf-8") as f:
+        with open(APP_DATA_DIR / "last_profile.txt", "r", encoding="utf-8") as f:
             name = f.read().strip()
             if name and get_profile_path(name).exists():
                 return name

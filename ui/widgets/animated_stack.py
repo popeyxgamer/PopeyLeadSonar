@@ -4,7 +4,7 @@ from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, QPoint, QParall
 
 class AnimatedStackedWidget(QStackedWidget):
     """
-    Ulepszony QStackedWidget z płynną animacją przesunięcia.
+    Ulepszony QStackedWidget z płynną animacją przesunięcia i pancernym sprzątaniem stanów.
     """
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -19,7 +19,7 @@ class AnimatedStackedWidget(QStackedWidget):
         if index == self.currentIndex() or index < 0 or index >= self.count():
             return
 
-        # Ostateczne wyczyszczenie poprzedniego stanu
+        # 1. Agresywne sprzątanie poprzedniego stanu (przerwanie duchów)
         if self._is_animating:
             if self._anim_group:
                 try:
@@ -29,6 +29,13 @@ class AnimatedStackedWidget(QStackedWidget):
                     pass
             self._is_animating = False
             self._anim_group = None
+
+        # 2. Dla pewności upewnij się, że WSZYSTKIE widoki poza obecnym są ukryte i na pozycji 0,0
+        for i in range(self.count()):
+            w = self.widget(i)
+            if w and i != self.currentIndex():
+                w.hide()
+                w.move(0, 0)
 
         self._next_index = index
         self._current_index = self.currentIndex()
@@ -45,7 +52,7 @@ class AnimatedStackedWidget(QStackedWidget):
             super().setCurrentIndex(index)
             return
 
-        # Przygotuj widgety
+        # Przygotuj widget docelowy
         next_w.setGeometry(0, 0, w, h)
         direction = "up" if index > self._current_index else "down"
         offset = h if direction == "up" else -h
@@ -54,7 +61,7 @@ class AnimatedStackedWidget(QStackedWidget):
         next_w.show()
         next_w.raise_()
 
-        # Tworzymy całkowicie nową grupę dla tego konkretnego przejścia
+        # 3. Nowa grupa animacji (fire-and-forget)
         self._anim_group = QParallelAnimationGroup(self)
 
         anim_next = QPropertyAnimation(next_w, b"pos", self._anim_group)
@@ -80,18 +87,26 @@ class AnimatedStackedWidget(QStackedWidget):
         self._finalize_transition()
 
     def _finalize_transition(self):
+        """Ostateczne zakończenie przejścia i ukrycie starych elementów."""
         if not self._is_animating: return
 
         self._is_animating = False
         super().setCurrentIndex(self._next_index)
 
-        # Resetujemy stan starego widgetu
+        # Ukrywamy stary widget i resetujemy jego pozycję
         prev_w = self.widget(self._current_index)
         if prev_w:
             prev_w.hide()
             prev_w.move(0, 0)
 
-        # Usuwamy grupę z pamięci (Qt zajmie się resztą)
+        # Ostateczne sprzątanie wszystkich innych widoków (na wypadek spamu kliknięć)
+        for i in range(self.count()):
+            if i != self._next_index:
+                w = self.widget(i)
+                if w:
+                    w.hide()
+                    w.move(0, 0)
+
         if self._anim_group:
             self._anim_group.deleteLater()
             self._anim_group = None
